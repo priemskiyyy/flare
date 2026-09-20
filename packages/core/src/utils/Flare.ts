@@ -6,7 +6,7 @@ import type { Destinations } from "src/types/Destinations";
 import type { FlareDiagnostics } from "src/types/FlareDiagnostics";
 import type { FlareOptions } from "src/types/FlareOptions";
 import type { FlareSchema } from "src/types/FlareSchema";
-import type { ReportFunction } from "src/types/FlareScope";
+import type { FlareScope, ReportFunction } from "src/types/FlareScope";
 import type { FlareSnapshot } from "src/types/FlareSnapshot";
 import type { FlareStatus } from "src/types/FlareStatus";
 import type { PrivacyPolicy } from "src/types/internal/PrivacyPolicy";
@@ -203,6 +203,32 @@ export class Flare<
   };
 
   /**
+   * Binds metadata to one operation. The scope belongs to the identity it is
+   * created under and goes stale when that identity changes.
+   *
+   * @example
+   * ```ts
+   * const upload = flare.scope({ tags: { area: "upload" }, operation: "upload-avatar" });
+   * upload.capture(error);
+   * ```
+   */
+  scope: {
+    // A method signature, for the reason given on `ReportFunction`.
+    bivariant(
+      options: ReportOptions<TSchema>,
+    ): FlareScope<DestinationName<TDestinations>, TSchema>;
+  }["bivariant"] = (options) => {
+    const generation = this.#session.state.get().generation;
+    const bound = this.#bindScope(generation, options);
+    return {
+      capture: (thrown, captureOptions = {}) =>
+        this.#report({ kind: "exception", thrown }, captureOptions, bound),
+      message: (text, captureOptions = {}) =>
+        this.#report({ kind: "message", text }, captureOptions, bound),
+    };
+  };
+
+  /**
    * Reports a failure. It is synchronous and never throws. Most callers
    * ignore the receipt.
    *
@@ -380,6 +406,25 @@ export class Flare<
       runtime.syncAmbient(next);
     }
   };
+
+  #bindScope(generation: number, options: ReportOptions<TSchema>): BoundScope {
+    try {
+      return {
+        generation,
+        ...prepareReportLayer(options, {
+          schema: this.#schema,
+          policy: this.#policy,
+        }),
+      };
+    } catch {
+      // Failing closed: a scope that could not be sanitized contributes nothing.
+      return {
+        generation,
+        layer: {},
+        losses: [{ path: "scope", reason: "invalid" }],
+      };
+    }
+  }
 
   #refusal(scope: BoundScope | null): ReportDropReason | null {
     if (this.#status.get().state === "disposed") {
