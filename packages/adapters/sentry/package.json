@@ -1,0 +1,68 @@
+{
+  "name": "@priemskiyyy/flare-sentry",
+  "version": "0.1.0",
+  "description": "Sentry destination for flare: event-local user, tags, contexts and breadcrumbs through a forked scope, for the browser and React Native, over an SDK you inject.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/priemskiyyy/flare.git",
+    "directory": "packages/adapters/sentry"
+  },
+  "bugs": {
+    "url": "https://github.com/priemskiyyy/flare/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react-native": {
+      "types": "./dist/reactNative.d.ts",
+      "import": "./dist/reactNative.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "lint:typescript": "tsc --noEmit -p .",
+    "lint:eslint": "eslint src",
+    "test:unit": "vitest run --root ../../.. --project sentry"
+  },
+  "peerDependencies": {
+    "@priemskiyyy/flare": ">=0.1.0 <0.2",
+    "@sentry/browser": ">=8.0.0 <11",
+    "@sentry/react-native": ">=6.0.0 <9"
+  },
+  "peerDependenciesMeta": {
+    "@sentry/browser": {
+      "optional": true
+    },
+    "@sentry/react-native": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@priemskiyyy/flare": "workspace:*"
+  },
+  "keywords": [
+    "sentry",
+    "error-reporting",
+    "error-tracking",
+    "react-native",
+    "typescript",
+    "flare",
+    "adapter"
+  ],
+  "homepage": "https://priemskiyyy.github.io/flare/"
+}
