@@ -1,4 +1,6 @@
 import type { AmbientSnapshot } from "src/types/AmbientSnapshot";
+import type { BreadcrumbOptions } from "src/types/BreadcrumbOptions";
+import type { BreadcrumbsOf } from "src/types/BreadcrumbsOf";
 import type { CaptureOptions } from "src/types/CaptureOptions";
 import type { ContextsOf } from "src/types/ContextsOf";
 import type { DestinationHandle } from "src/types/DestinationHandle";
@@ -41,6 +43,7 @@ import { Diagnostics } from "src/utils/internal/diagnostics/Diagnostics";
 import { createReceipt } from "src/utils/internal/dispatch/createReceipt";
 import { DedupeIndex } from "src/utils/internal/dispatch/DedupeIndex";
 import { RateWindow } from "src/utils/internal/dispatch/RateWindow";
+import { prepareBreadcrumb } from "src/utils/internal/intake/prepareBreadcrumb";
 import { prepareContexts } from "src/utils/internal/intake/prepareContexts";
 import { prepareReportLayer } from "src/utils/internal/intake/prepareReportLayer";
 import { prepareReportPayload } from "src/utils/internal/intake/prepareReportPayload";
@@ -54,6 +57,16 @@ import { SessionState } from "src/utils/internal/session/SessionState";
 type BoundScope = ReturnType<typeof prepareReportLayer> & {
   generation: number;
 };
+
+type BreadcrumbArguments<
+  TSchema extends FlareSchema,
+  TName extends keyof BreadcrumbsOf<TSchema>,
+> =
+  TSchema["breadcrumbs"] extends Record<string, unknown>
+    ? undefined extends BreadcrumbsOf<TSchema>[TName]
+      ? [data?: BreadcrumbsOf<TSchema>[TName], options?: BreadcrumbOptions]
+      : [data: BreadcrumbsOf<TSchema>[TName], options?: BreadcrumbOptions]
+    : [data?: BreadcrumbsOf<TSchema>[TName], options?: BreadcrumbOptions];
 
 const toAmbient = (snapshot: SessionSnapshot): AmbientSnapshot =>
   Object.freeze({
@@ -105,6 +118,7 @@ export class Flare<
   #pendingReceipts = 0;
   #submitDepth = 0;
   #ambient: AmbientSnapshot;
+  #identityBeganAt = Number.NEGATIVE_INFINITY;
 
   constructor(options: FlareOptions<TDestinations, TSchema>) {
     this.#now = options.now ?? Date.now;
@@ -233,6 +247,7 @@ export class Flare<
       if (!changed) {
         return;
       }
+      this.#identityBeganAt = this.#now();
       this.#diagnostics.record({
         source: "session",
         type: "identity changed",
@@ -309,6 +324,58 @@ export class Flare<
         return;
       }
       this.#session.setContext(name, context);
+    });
+  };
+
+  /**
+   * Records one step of error-relevant history. It creates no report.
+   * Breadcrumbs are sanitized before they are kept, bounded in number, and
+   * cleared when the identity changes.
+   *
+   * @example
+   * ```ts
+   * flare.breadcrumb("uploadStarted", { kind: "avatar" });
+   * ```
+   */
+  breadcrumb = <TName extends keyof BreadcrumbsOf<TSchema> & string>(
+    name: TName,
+    ...[data, options = {}]: BreadcrumbArguments<TSchema, TName>
+  ) => {
+    this.#guardSession(`breadcrumbs.${name}`, (generation) => {
+      const occurredAt = this.#readOccurrence(options.timestamp);
+      const timestamp = occurredAt ?? this.#now();
+      // A backward clock must not reject a breadcrumb recorded under the current identity.
+      if (occurredAt !== null && occurredAt < this.#identityBeganAt) {
+        this.#diagnostics.record({
+          source: "session",
+          type: "breadcrumb stale",
+          destination: null,
+          report: null,
+          context: { name },
+        });
+        return;
+      }
+
+      const prepared = prepareBreadcrumb(
+        { name, data, timestamp },
+        this.#schema.breadcrumbs,
+        this.#policy,
+      );
+      this.#recordLosses(prepared.losses);
+      if (!this.#isCurrentSession(generation)) {
+        return;
+      }
+      const breadcrumb = prepared.value;
+      if (breadcrumb === null) {
+        return;
+      }
+      this.#session.addBreadcrumb(breadcrumb);
+      for (const runtime of this.#runtimes.values()) {
+        if (!this.#isCurrentSession(generation)) {
+          return;
+        }
+        runtime.ambientBreadcrumb(breadcrumb);
+      }
     });
   };
 
@@ -448,6 +515,16 @@ export class Flare<
     }
     this.#diagnostics.dispose();
   };
+
+  #readOccurrence(timestamp: unknown) {
+    if (typeof timestamp !== "number") {
+      return null;
+    }
+    if (!Number.isFinite(timestamp) || timestamp < 0) {
+      return null;
+    }
+    return timestamp;
+  }
 
   #readDestinations(destinations: TDestinations) {
     const adapters = new Map<DestinationName<TDestinations>, ReporterAdapter>();
