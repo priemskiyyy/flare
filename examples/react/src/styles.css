@@ -1,0 +1,177 @@
+:root {
+  color-scheme: light;
+  font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  color: #243247;
+  background: #f2f5f8;
+  font-synthesis: none;
+  line-height: 1.5;
+  --surface: #fff;
+  --line: #e2e7ed;
+  --muted: #64738a;
+  --accent: #b74916;
+  --accent-soft: #fff2e9;
+  --success: #21715a;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 20rem;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+button,
+a,
+summary {
+  touch-action: manipulation;
+}
+:focus-visible {
+  outline: 3px solid #c16136;
+  outline-offset: 4px;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+a:hover {
+  color: var(--accent);
+}
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+code,
+pre {
+  font-family: var(--mono);
+}
+.status-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  height: 0.4rem;
+  width: 0.4rem;
+  background: #8c9aad;
+  border-radius: 50%;
+}
+.backend-state[data-state="ready"] .status-dot,
+.live-label .status-dot {
+  background: var(--success);
+}
+pre {
+  white-space: pre;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.65;
+}
+.application-main {
+  max-width: 80rem;
+  margin: auto;
+  padding: 2.5rem 2rem 5rem;
+  scroll-margin-top: 5rem;
+}
+.page-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.75rem;
+}
+.page-intro h1 {
+  font-size: clamp(1.65rem, 2.5vw, 2.15rem);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.04em;
+}
+.page-intro p {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+.documentation-link {
+  border-bottom: 1px solid #c8d1dc;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  padding-bottom: 0.2rem;
+}
+.documentation-link span {
+  margin-left: 0.4rem;
+}
+.playground-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 1.5rem;
+}
+.scenario-list {
+  display: grid;
+  gap: 1rem;
+}
+.application-footer {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding-top: 1.5rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.application-footer a {
+  border-bottom: 1px solid #c8d1dc;
+}
+
+.report-shortcut {
+  display: none;
+}
+@media (max-width: 50rem) {
+  .application-main {
+    padding: 1.75rem 1.25rem 5rem;
+  }
+  .playground-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+  }
+  .page-intro {
+    align-items: flex-start;
+  }
+  .documentation-link {
+    display: none;
+  }
+  .application-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .report-shortcut {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    position: fixed;
+    bottom: 1.25rem;
+    left: 1rem;
+    z-index: 10;
+    padding: 0.65rem 0.9rem;
+    border: 1px solid var(--line);
+    border-radius: 2rem;
+    background: var(--surface);
+    box-shadow: 0 3px 12px #2432471a;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+}
+@media (max-width: 28rem) {
+  .application-main {
+    padding-inline: 1rem;
+  }
+}
