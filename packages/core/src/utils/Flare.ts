@@ -4,6 +4,7 @@ import type { DestinationHandle } from "src/types/DestinationHandle";
 import type { DestinationName } from "src/types/DestinationName";
 import type { Destinations } from "src/types/Destinations";
 import type { FlareDiagnostics } from "src/types/FlareDiagnostics";
+import type { FlareFlushResult } from "src/types/FlareFlushResult";
 import type { FlareOptions } from "src/types/FlareOptions";
 import type { FlareSchema } from "src/types/FlareSchema";
 import type { FlareScope, ReportFunction } from "src/types/FlareScope";
@@ -25,6 +26,7 @@ import {
   DEFAULT_BUFFER,
   DEFAULT_DEADLINE_MS,
   DEFAULT_DEDUPE,
+  DEFAULT_FLUSH_TIMEOUT_MS,
   DEFAULT_REPORTS_PER_MINUTE,
 } from "src/utils/constants/defaults";
 import { DEFAULT_LIMITS } from "src/utils/constants/limits";
@@ -258,6 +260,44 @@ export class Flare<
     text,
     options = {},
   ) => this.#report({ kind: "message", text }, options, null);
+
+  /**
+   * Waits for the work accepted before the call, then for each provider's own
+   * flush. Captures made afterwards do not extend the wait. The timeout bounds
+   * the wait only: it cancels nothing and proves nothing about delivery.
+   *
+   * @example
+   * ```ts
+   * await flare.flush({ timeoutMs: 1500 });
+   * ```
+   */
+  flush = async ({
+    timeoutMs = DEFAULT_FLUSH_TIMEOUT_MS,
+  }: { timeoutMs?: number } = {}): Promise<
+    FlareFlushResult<DestinationName<TDestinations>>
+  > => {
+    const results = await Promise.all(
+      [...this.#runtimes].map(async ([name, runtime]) => ({
+        name,
+        ...(await runtime.flush(timeoutMs)),
+      })),
+    );
+
+    const destinations: FlareFlushResult<
+      DestinationName<TDestinations>
+    >["destinations"] = Object.create(null);
+    for (const result of results) {
+      destinations[result.name] = result.boundary;
+    }
+    this.#diagnostics.record({
+      source: "runtime",
+      type: "flushed",
+      destination: null,
+      report: null,
+      context: { timeoutMs },
+    });
+    return { drained: results.every((result) => result.drained), destinations };
+  };
 
   /**
    * The escape hatch to one destination. Reading it is passive. Calls made
