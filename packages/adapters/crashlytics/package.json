@@ -1,0 +1,61 @@
+{
+  "name": "@priemskiyyy/flare-crashlytics",
+  "version": "0.1.0",
+  "description": "Firebase Crashlytics destination for flare on React Native: non-fatal errors through recordError, with an honest capability surface and an opt-in ambient integration for keys, user and logs.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/priemskiyyy/flare.git",
+    "directory": "packages/adapters/crashlytics"
+  },
+  "bugs": {
+    "url": "https://github.com/priemskiyyy/flare/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "lint:typescript": "tsc --noEmit -p .",
+    "lint:eslint": "eslint src",
+    "test:unit": "vitest run --root ../../.. --project crashlytics"
+  },
+  "peerDependencies": {
+    "@priemskiyyy/flare": ">=0.1.0 <0.2",
+    "@react-native-firebase/crashlytics": ">=22.0.0 <27"
+  },
+  "peerDependenciesMeta": {
+    "@react-native-firebase/crashlytics": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@priemskiyyy/flare": "workspace:*"
+  },
+  "keywords": [
+    "crashlytics",
+    "firebase",
+    "react-native",
+    "error-reporting",
+    "crash-reporting",
+    "typescript",
+    "flare",
+    "adapter"
+  ],
+  "homepage": "https://priemskiyyy.github.io/flare/"
+}
