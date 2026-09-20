@@ -1,0 +1,12 @@
+packages:
+  - packages/*
+  - packages/adapters/*
+  - examples/*
+
+allowBuilds:
+  # The provider SDKs are here for their types only. None of their install
+  # scripts, binaries or generated code is ever run.
+  "@firebase/util": false
+  "@sentry/cli": false
+  esbuild: true
+  protobufjs: false
