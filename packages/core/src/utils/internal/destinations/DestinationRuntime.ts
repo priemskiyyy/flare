@@ -1,5 +1,6 @@
 import type { AmbientSnapshot } from "src/types/AmbientSnapshot";
 import type { Breadcrumb } from "src/types/Breadcrumb";
+import type { DestinationFlushResult } from "src/types/DestinationFlushResult";
 import type { DestinationOutcome } from "src/types/DestinationOutcome";
 import type { DestinationStatus } from "src/types/DestinationStatus";
 import type { FlareDiagnosticEvent } from "src/types/FlareDiagnosticEvent";
@@ -49,6 +50,8 @@ type Options<TNative> = {
   record: (event: Omit<FlareDiagnosticEvent, "timestamp">) => void;
   changed: () => void;
 };
+
+const TIMED_OUT = Symbol("timed out");
 
 /**
  * Owns one destination: its session, its startup buffer, the deadline of
@@ -170,6 +173,57 @@ export class DestinationRuntime<TNative = unknown> {
     }
 
     assertUnreachable(current);
+  };
+
+  /** Waits for submissions accepted before the call, then for the provider's own flush. */
+  flush = async (
+    timeoutMs: number,
+  ): Promise<{ drained: boolean; boundary: DestinationFlushResult }> => {
+    const current = this.#state.get();
+    if (current.state !== "ready") {
+      return { drained: false, boundary: { status: "not-ready" } };
+    }
+
+    const controller = new AbortController();
+    const timeout = deferred<typeof TIMED_OUT>();
+    const timer = setTimeout(() => {
+      controller.abort();
+      timeout.resolve(TIMED_OUT);
+    }, timeoutMs);
+    unrefTimer(timer);
+
+    try {
+      // Later submissions are not in this list, so they cannot extend the wait.
+      const accepted = [...this.#flights].map((flight) => flight.done.promise);
+      const drained = await Promise.race([
+        Promise.all(accepted),
+        timeout.promise,
+      ]);
+      if (drained === TIMED_OUT) {
+        return { drained: false, boundary: { status: "timeout" } };
+      }
+
+      if (this.#state.get() !== current) {
+        return { drained: true, boundary: { status: "not-ready" } };
+      }
+      const { flush } = current.session;
+      if (typeof flush !== "function") {
+        return { drained: true, boundary: { status: "unsupported" } };
+      }
+
+      const boundary = await Promise.race([
+        flush.call(current.session, { timeoutMs, signal: controller.signal }),
+        timeout.promise,
+      ]);
+      if (boundary === TIMED_OUT) {
+        return { drained: true, boundary: { status: "timeout" } };
+      }
+      return { drained: true, boundary };
+    } catch (error) {
+      return { drained: true, boundary: { status: "failed", error } };
+    } finally {
+      clearTimeout(timer);
+    }
   };
 
   syncAmbient = (snapshot: AmbientSnapshot) => {

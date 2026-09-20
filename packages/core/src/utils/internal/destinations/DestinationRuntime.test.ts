@@ -49,6 +49,13 @@ const SUBMITTED: DestinationOutcome = {
   losses: [],
 };
 
+const SUBMITTED_RESULT = {
+  status: "submitted" as const,
+  evidence: "sdk-call-returned" as const,
+  event: null,
+  losses: [],
+};
+
 const create = (
   options: MockAdapterOptions = {},
   overrides: {
@@ -312,4 +319,359 @@ test("a report that expires while start has failed is skipped as start-failed", 
   expect(outcomes.get("stuck")).toEqual([
     { status: "skipped", reason: "start-failed" },
   ]);
+});
+
+test("a held submission settles with what the provider answers", async () => {
+  const { mock, runtime, accept, outcomes } = create({ hold: true });
+  runtime.start();
+  accept("report");
+
+  expect(runtime.inFlight).toBe(1);
+
+  mock.submissions[0]?.settle({
+    status: "submitted",
+    evidence: "sdk-callback-completed",
+    event: { id: "evt_1" },
+    losses: [{ path: "breadcrumbs", reason: "unsupported" }],
+  });
+  await flushMicrotasks();
+
+  expect(outcomes.get("report")).toEqual([
+    {
+      status: "submitted",
+      evidence: "sdk-callback-completed",
+      event: { id: "evt_1" },
+      losses: [{ path: "breadcrumbs", reason: "unsupported" }],
+    },
+  ]);
+  expect(runtime.inFlight).toBe(0);
+});
+
+test("a provider that rejects, throws, or answers nonsense is a failure of that report only", async () => {
+  const rejection = new Error("network down");
+  const thrown = new Error("sdk threw");
+  const rejecting = create({ hold: true });
+  const throwing = create({
+    onSubmit: () => {
+      throw thrown;
+    },
+  });
+  const nonsense = create({
+    onSubmit: () => JSON.parse('{"status":"delivered"}'),
+  });
+  for (const each of [rejecting, throwing, nonsense]) {
+    each.runtime.start();
+    each.accept("report");
+  }
+  rejecting.mock.submissions[0]?.fail(rejection);
+  await flushMicrotasks();
+
+  expect(rejecting.outcomes.get("report")).toEqual([
+    { status: "failed", error: rejection },
+  ]);
+  expect(throwing.outcomes.get("report")).toEqual([
+    { status: "failed", error: thrown },
+  ]);
+  expect(nonsense.outcomes.get("report")?.[0]).toMatchObject({
+    status: "failed",
+  });
+  expect(throwing.runtime.status.get()).toEqual({ state: "ready" });
+});
+
+test("a provider result with a throwing then getter fails only its own report", () => {
+  const failure = new Error("cannot read then");
+  const { runtime, accept, outcomes } = create({
+    onSubmit: () => ({
+      ...SUBMITTED_RESULT,
+      get then() {
+        throw failure;
+      },
+    }),
+  });
+  runtime.start();
+
+  expect(() => accept("report")).not.toThrow();
+  expect(outcomes.get("report")).toEqual([
+    { status: "failed", error: failure },
+  ]);
+  expect(runtime.inFlight).toBe(0);
+});
+
+test.each([
+  { held: false, field: "status" },
+  { held: true, field: "status" },
+  { held: false, field: "event.id" },
+  { held: true, field: "event.id" },
+])(
+  "a throwing $field getter is contained after asynchronous submission $held",
+  async ({ held, field }) => {
+    const failure = new Error("cannot read result");
+    const result =
+      field === "status"
+        ? {
+            ...SUBMITTED_RESULT,
+            get status(): never {
+              throw failure;
+            },
+          }
+        : {
+            ...SUBMITTED_RESULT,
+            event: {
+              get id(): never {
+                throw failure;
+              },
+            },
+          };
+    const { runtime, accept, outcomes, mock } = create({
+      hold: held,
+      onSubmit: () => (held ? undefined : result),
+    });
+    runtime.start();
+
+    expect(() => accept("report")).not.toThrow();
+    if (held) {
+      mock.submissions[0]?.settle(result);
+    }
+    await flushMicrotasks();
+    expect(outcomes.get("report")).toEqual([
+      { status: "failed", error: failure },
+    ]);
+    expect(runtime.inFlight).toBe(0);
+  },
+);
+
+test("a hanging provider is cut off at the deadline as indeterminate, and its late answer is ignored", async () => {
+  vi.useFakeTimers();
+  const { mock, runtime, accept, outcomes } = create(
+    { hold: true },
+    { deadlineMs: 5_000 },
+  );
+  runtime.start();
+  accept("slow");
+
+  vi.advanceTimersByTime(4_999);
+
+  expect(outcomes.get("slow")).toEqual([]);
+
+  vi.advanceTimersByTime(1);
+
+  expect(outcomes.get("slow")).toEqual([
+    { status: "indeterminate", reason: "deadline" },
+  ]);
+  expect(mock.submissions[0]?.context.signal.aborted).toBe(true);
+
+  mock.submissions[0]?.settle();
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(outcomes.get("slow")).toHaveLength(1);
+});
+
+test("a message is skipped, not faked, where the provider cannot carry messages", () => {
+  const { mock, runtime, accept, outcomes } = create({
+    capabilities: { messages: false },
+  });
+  runtime.start();
+
+  accept("note", "message");
+  accept("crash", "exception");
+
+  expect(outcomes.get("note")).toEqual([
+    { status: "skipped", reason: "unsupported-report-kind" },
+  ]);
+  expect(mock.submissions.map((submission) => submission.report.id)).toEqual([
+    "crash",
+  ]);
+});
+
+test("the adapter is told the current identity generation and its synchronous work is bracketed", () => {
+  const { mock, runtime, accept, depth } = create({ hold: true });
+  runtime.start();
+
+  accept("report");
+
+  expect(mock.submissions[0]?.context.currentGeneration()).toBe(7);
+  expect(depth.enter).toHaveBeenCalledTimes(1);
+  expect(depth.exit).toHaveBeenCalledTimes(1);
+});
+
+test("disposal settles everything it holds and refuses what comes later", async () => {
+  const { mock, runtime, accept, outcomes } = create({ hold: true });
+  runtime.start();
+  accept("in-flight");
+  const idle = create();
+  idle.accept("buffered");
+
+  runtime.dispose();
+  runtime.dispose();
+  idle.runtime.dispose();
+  accept("late");
+
+  expect(outcomes.get("in-flight")).toEqual([
+    { status: "indeterminate", reason: "disposed" },
+  ]);
+  expect(idle.outcomes.get("buffered")).toEqual([
+    { status: "dropped", reason: "disposed" },
+  ]);
+  expect(outcomes.get("late")).toEqual([
+    { status: "dropped", reason: "disposed" },
+  ]);
+  expect(mock.submissions[0]?.context.signal.aborted).toBe(true);
+  expect(mock.sessions[0]?.disposeCount).toBe(1);
+  expect(runtime.status.get()).toEqual({ state: "disposed" });
+  expect(runtime.native).toBeNull();
+
+  mock.submissions[0]?.settle();
+  await flushMicrotasks();
+
+  expect(outcomes.get("in-flight")).toHaveLength(1);
+});
+
+test("a session that arrives after disposal is released at once and never used", async () => {
+  const { mock, runtime, accept } = create({ holdOpen: true });
+  runtime.start();
+  runtime.dispose();
+
+  mock.openings[0]?.settle();
+  await flushMicrotasks();
+  accept("late");
+
+  expect(mock.sessions[0]?.disposeCount).toBe(1);
+  expect(mock.submissions).toEqual([]);
+  expect(runtime.status.get()).toEqual({ state: "disposed" });
+});
+
+test.each([
+  {
+    label: "throws",
+    dispose: () => {
+      throw new Error("close threw");
+    },
+  },
+  {
+    label: "rejects",
+    dispose: () => Promise.reject(new Error("close rejected")),
+  },
+])("a session whose disposal $label cannot break the host", async (row) => {
+  const unhandled = vi.fn();
+  process.on("unhandledRejection", unhandled);
+  const mock = createMockAdapter();
+  const runtime = new DestinationRuntime({
+    name: "primary",
+    adapter: {
+      ...mock.adapter,
+      open: () => ({
+        native: null,
+        submit: () => SUBMITTED_RESULT,
+        dispose: row.dispose,
+      }),
+    },
+    buffer: { maxReports: 10, maxAgeMs: 60_000 },
+    deadlineMs: 5_000,
+    now: () => Date.now(),
+    currentGeneration: () => 0,
+    readAmbient: () => ({ generation: 0, user: null, tags: {}, contexts: {} }),
+    submitDepth: { enter: () => {}, exit: () => {} },
+    record: () => {},
+    changed: () => {},
+  });
+  runtime.start();
+
+  expect(() => runtime.dispose()).not.toThrow();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  process.off("unhandledRejection", unhandled);
+
+  expect(unhandled).not.toHaveBeenCalled();
+  expect(runtime.status.get()).toEqual({ state: "disposed" });
+});
+
+test("flush says not-ready before start and unsupported where the adapter has no flush", async () => {
+  const idle = create();
+  const bare = create();
+  bare.runtime.start();
+
+  await expect(idle.runtime.flush(100)).resolves.toEqual({
+    drained: false,
+    boundary: { status: "not-ready" },
+  });
+  await expect(bare.runtime.flush(100)).resolves.toEqual({
+    drained: true,
+    boundary: { status: "unsupported" },
+  });
+});
+
+test("flush waits for work accepted before the call and not for work accepted after", async () => {
+  const { mock, runtime, accept } = create({ hold: true, flush: true });
+  runtime.start();
+  accept("before");
+
+  const flushed = runtime.flush(1_000);
+  accept("after");
+  mock.submissions[0]?.settle();
+
+  await expect(flushed).resolves.toEqual({
+    drained: true,
+    boundary: { status: "flushed" },
+  });
+  expect(runtime.inFlight).toBe(1);
+  expect(mock.sessions[0]?.flushes).toHaveLength(1);
+});
+
+test("a flush that runs out of time says timeout and never claims the work was lost", async () => {
+  vi.useFakeTimers();
+  const { runtime, accept } = create({ hold: true, flush: true });
+  runtime.start();
+  accept("stuck");
+
+  const flushed = runtime.flush(200);
+  await vi.advanceTimersByTimeAsync(200);
+
+  await expect(flushed).resolves.toEqual({
+    drained: false,
+    boundary: { status: "timeout" },
+  });
+});
+
+test("a held provider flush is bounded by the same timeout", async () => {
+  vi.useFakeTimers();
+  const { mock, runtime } = create({ flush: "hold" });
+  runtime.start();
+
+  const flushed = runtime.flush(200);
+  await vi.advanceTimersByTimeAsync(200);
+
+  await expect(flushed).resolves.toEqual({
+    drained: true,
+    boundary: { status: "timeout" },
+  });
+  expect(mock.sessions[0]?.flushes[0]?.context.signal.aborted).toBe(true);
+});
+
+test("ambient state is pushed when the destination becomes ready and whenever asked", () => {
+  const { mock, runtime } = create({ ambient: true });
+  runtime.start();
+
+  runtime.syncAmbient({
+    generation: 8,
+    user: { id: "ada" },
+    tags: {},
+    contexts: {},
+  });
+  runtime.ambientBreadcrumb({ name: "opened", data: null, timestamp: 1 });
+
+  expect(mock.sessions[0]?.ambient).toEqual({
+    sessions: [
+      { generation: 7, user: null, tags: {}, contexts: {} },
+      { generation: 8, user: { id: "ada" }, tags: {}, contexts: {} },
+    ],
+    breadcrumbs: [{ name: "opened", data: null, timestamp: 1 }],
+  });
+});
+
+test("methods stay bound when passed around", () => {
+  const { runtime } = create();
+  const { start, status } = runtime;
+
+  start();
+
+  expect(status.get()).toEqual({ state: "ready" });
 });
