@@ -1,5 +1,6 @@
 import type { AmbientSnapshot } from "src/types/AmbientSnapshot";
 import type { CaptureOptions } from "src/types/CaptureOptions";
+import type { ContextsOf } from "src/types/ContextsOf";
 import type { DestinationHandle } from "src/types/DestinationHandle";
 import type { DestinationName } from "src/types/DestinationName";
 import type { Destinations } from "src/types/Destinations";
@@ -10,9 +11,11 @@ import type { FlareSchema } from "src/types/FlareSchema";
 import type { FlareScope, ReportFunction } from "src/types/FlareScope";
 import type { FlareSnapshot } from "src/types/FlareSnapshot";
 import type { FlareStatus } from "src/types/FlareStatus";
+import type { FlareUser } from "src/types/FlareUser";
 import type { PrivacyPolicy } from "src/types/internal/PrivacyPolicy";
 import type { ReportLayer } from "src/types/internal/ReportLayer";
 import type { ReportSource } from "src/types/internal/ReportSource";
+import type { MappingLoss } from "src/types/MappingLoss";
 import type { NativeOf } from "src/types/NativeOf";
 import type { ObservableValue } from "src/types/ObservableValue";
 import type { Receipt } from "src/types/Receipt";
@@ -21,6 +24,7 @@ import type { ReportOptions } from "src/types/ReportOptions";
 import type { ReporterAdapter } from "src/types/ReporterAdapter";
 import type { SanitizedReport } from "src/types/SanitizedReport";
 import type { SessionSnapshot } from "src/types/SessionSnapshot";
+import type { TagsOf } from "src/types/TagsOf";
 import { ValueStore } from "src/utils/common/ValueStore";
 import {
   DEFAULT_BUFFER,
@@ -37,8 +41,11 @@ import { Diagnostics } from "src/utils/internal/diagnostics/Diagnostics";
 import { createReceipt } from "src/utils/internal/dispatch/createReceipt";
 import { DedupeIndex } from "src/utils/internal/dispatch/DedupeIndex";
 import { RateWindow } from "src/utils/internal/dispatch/RateWindow";
+import { prepareContexts } from "src/utils/internal/intake/prepareContexts";
 import { prepareReportLayer } from "src/utils/internal/intake/prepareReportLayer";
 import { prepareReportPayload } from "src/utils/internal/intake/prepareReportPayload";
+import { prepareTags } from "src/utils/internal/intake/prepareTags";
+import { prepareUser } from "src/utils/internal/intake/prepareUser";
 import { composeReport } from "src/utils/internal/report/composeReport";
 import { createReportId } from "src/utils/internal/report/createReportId";
 import { fitReport } from "src/utils/internal/report/fitReport";
@@ -202,6 +209,107 @@ export class Flare<
       runtime.start();
     }
     this.#diagnostics.changed();
+  };
+
+  /**
+   * Sets who reports belong to, or `null` to sign out. A different `id`
+   * starts a new identity generation: session tags, contexts and breadcrumbs
+   * are cleared, and scopes created earlier become stale.
+   *
+   * @example
+   * ```ts
+   * flare.user({ id: "user_42", email: "ada@example.com" });
+   * flare.user(null);
+   * ```
+   */
+  user = (user: FlareUser | null) => {
+    this.#guardSession("user", (generation) => {
+      const prepared = prepareUser(user, this.#policy);
+      this.#recordLosses(prepared.losses);
+      if (!this.#isCurrentSession(generation)) {
+        return;
+      }
+      const changed = this.#session.identify(prepared);
+      if (!changed) {
+        return;
+      }
+      this.#diagnostics.record({
+        source: "session",
+        type: "identity changed",
+        destination: null,
+        report: null,
+        context: { generation: this.#session.state.get().generation },
+      });
+    });
+  };
+
+  /**
+   * Sets a session tag, or removes it with `null`.
+   *
+   * @example
+   * ```ts
+   * flare.tag("area", "upload");
+   * ```
+   */
+  tag = <TKey extends keyof TagsOf<TSchema> & string>(
+    key: TKey,
+    value: TagsOf<TSchema>[TKey] | null,
+  ) => {
+    this.#guardSession(`tags.${key}`, (generation) => {
+      if (value === null) {
+        this.#session.removeTag(key);
+        return;
+      }
+      const prepared = prepareTags(
+        { [key]: value },
+        this.#schema.tags,
+        this.#policy,
+      );
+      this.#recordLosses(prepared.losses);
+      if (!this.#isCurrentSession(generation)) {
+        return;
+      }
+      const tag = prepared.value[key];
+      if (tag === undefined) {
+        return;
+      }
+      this.#session.setTag(key, tag);
+    });
+  };
+
+  /**
+   * Sets a session context, or removes it with `null`. A context is replaced
+   * as a whole, never merged with its previous value.
+   *
+   * @example
+   * ```ts
+   * flare.context("workspace", { id: "w_1", plan: "pro" });
+   * ```
+   */
+  context = <TName extends keyof ContextsOf<TSchema> & string>(
+    name: TName,
+    value: ContextsOf<TSchema>[TName] | null,
+  ) => {
+    this.#guardSession(`contexts.${name}`, (generation) => {
+      if (value === null) {
+        this.#session.removeContext(name);
+        return;
+      }
+      const prepared = prepareContexts(
+        { [name]: value },
+        this.#schema.contexts,
+        this.#policy,
+      );
+      this.#recordLosses(prepared.losses);
+      if (!this.#isCurrentSession(generation)) {
+        return;
+      }
+      const context = prepared.value[name];
+      if (context === undefined) {
+        return;
+      }
+      this.#session.setContext(name, context);
+    });
   };
 
   /**
@@ -446,6 +554,46 @@ export class Flare<
       runtime.syncAmbient(next);
     }
   };
+
+  // A scrubber that throws must cost the data it was given, never the host.
+  #guardSession(path: string, change: (generation: number) => void) {
+    if (this.#status.get().state === "disposed") {
+      return;
+    }
+
+    try {
+      change(this.#session.state.get().generation);
+    } catch {
+      this.#diagnostics.record({
+        source: "session",
+        type: "session change rejected",
+        destination: null,
+        report: null,
+        context: { path },
+      });
+    }
+  }
+
+  // Validators, scrubbers and diagnostic listeners can change the account while data is prepared.
+  #isCurrentSession(generation: number) {
+    return (
+      this.#status.get().state !== "disposed" &&
+      this.#session.state.get().generation === generation
+    );
+  }
+
+  #recordLosses(losses: readonly MappingLoss[]) {
+    if (losses.length === 0) {
+      return;
+    }
+    this.#diagnostics.record({
+      source: "session",
+      type: "session losses",
+      destination: null,
+      report: null,
+      context: { losses },
+    });
+  }
 
   #bindScope(generation: number, options: ReportOptions<TSchema>): BoundScope {
     try {
