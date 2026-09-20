@@ -1,0 +1,111 @@
+{
+  "name": "@priemskiyyy/flare-devtools",
+  "version": "0.1.0",
+  "description": "Devtools for flare: a framework-independent inspector for destination statuses and capabilities, buffers, pending receipts and a payload-free timeline, with React, Vue, Solid and Svelte wrappers.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/priemskiyyy/flare.git",
+    "directory": "packages/devtools"
+  },
+  "bugs": {
+    "url": "https://github.com/priemskiyyy/flare/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    },
+    "./vue": {
+      "types": "./dist/vue.d.ts",
+      "import": "./dist/vue.js"
+    },
+    "./solid": {
+      "types": "./dist/solid.d.ts",
+      "import": "./dist/solid.js"
+    },
+    "./svelte": {
+      "types": "./dist/svelte.d.ts",
+      "import": "./dist/svelte.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsdown",
+    "lint:typescript": "tsc --noEmit -p .",
+    "lint:eslint": "eslint src",
+    "test:unit": "vitest run --root ../.. --project devtools"
+  },
+  "peerDependencies": {
+    "@priemskiyyy/flare": ">=0.1.0 <0.2",
+    "@priemskiyyy/flare-react": ">=0.1.0 <0.2",
+    "@priemskiyyy/flare-solid": ">=0.1.0 <0.2",
+    "@priemskiyyy/flare-svelte": ">=0.1.0 <0.2",
+    "@priemskiyyy/flare-vue": ">=0.1.0 <0.2",
+    "react": ">=19.2.0 <20",
+    "solid-js": ">=1.9.0 <2",
+    "svelte": ">=5.29.0 <6",
+    "vue": ">=3.5.0 <4"
+  },
+  "peerDependenciesMeta": {
+    "@priemskiyyy/flare-react": {
+      "optional": true
+    },
+    "@priemskiyyy/flare-solid": {
+      "optional": true
+    },
+    "@priemskiyyy/flare-svelte": {
+      "optional": true
+    },
+    "@priemskiyyy/flare-vue": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "solid-js": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@priemskiyyy/flare": "workspace:*",
+    "@priemskiyyy/flare-react": "workspace:*",
+    "@priemskiyyy/flare-solid": "workspace:*",
+    "@priemskiyyy/flare-svelte": "workspace:*",
+    "@priemskiyyy/flare-vue": "workspace:*"
+  },
+  "keywords": [
+    "devtools",
+    "inspector",
+    "diagnostics",
+    "error-reporting",
+    "react",
+    "vue",
+    "solid",
+    "svelte",
+    "typescript",
+    "flare"
+  ],
+  "homepage": "https://priemskiyyy.github.io/flare/"
+}
