@@ -1,0 +1,68 @@
+name: packages-test
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "scripts/**"
+  push:
+    branches:
+      - "main"
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "scripts/**"
+
+permissions:
+  contents: read
+
+# Named, not derived from the workflow: when publish calls this workflow, every
+# called workflow shares the caller's name and they would cancel each other.
+concurrency:
+  group: packages-test-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest supported Node with the oldest supported React, and the newest with the newest.
+        include:
+          - node: "22.18.0"
+            react: "19.2.0"
+          - node: "24"
+            react: "19.2.8"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install the React version under test
+        env:
+          REACT_VERSION: ${{ matrix.react }}
+        run: pnpm add -Dw --ignore-scripts "react@$REACT_VERSION" "react-dom@$REACT_VERSION"
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Linting Typescript
+        run: pnpm lint:typescript
+
+      - name: Linting Eslint
+        run: pnpm lint:eslint
+
+      # Every provider SDK is faked in process, so the whole suite runs here
+      # with no service, no device and no credentials.
+      - name: Unit tests
+        run: pnpm test:unit
