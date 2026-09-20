@@ -1,0 +1,19 @@
+node_modules/
+.idea/
+.DS_Store
+.env
+.env.*
+!.env.example
+dist/
+.svelte-kit/
+coverage/
+*.tgz
+.artifacts/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+
+# pnpm store created by the packed-consumer check
+.pnpm-store/
+
+# Local planning notes and decision log, not part of the library
+tasks/
