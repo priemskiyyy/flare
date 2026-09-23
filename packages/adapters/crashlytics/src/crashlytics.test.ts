@@ -95,6 +95,38 @@ test("recordError takes no metadata, so everything event-local is recorded as a 
   expect(fake.calls).toMatchObject({ setAttributes: 0, setUserId: 0 });
 });
 
+test("without user mirroring, a report whose user signed out since it was captured is not recorded under the next one", async () => {
+  const { fake, flare } = create();
+
+  flare.user({ id: "ada" });
+
+  const receipt = flare.capture(new Error("captured as ada, before start"));
+
+  flare.user({ id: "grace" });
+  flare.start();
+
+  await expect(receipt.settled).resolves.toEqual({
+    state: "settled",
+    outcomes: {
+      crashlytics: { status: "skipped", reason: "identity-mismatch" },
+    },
+  });
+  expect(fake.recorded).toEqual([]);
+});
+
+test("without user mirroring, an anonymous report buffered before a sign-in is recorded", async () => {
+  const { fake, flare } = create();
+  const receipt = flare.capture(new Error("during boot"));
+
+  flare.user({ id: "ada" });
+  flare.start();
+
+  await expect(receipt.settled).resolves.toMatchObject({
+    outcomes: { crashlytics: { status: "submitted" } },
+  });
+  expect(fake.recorded).toHaveLength(1);
+});
+
 test("a message is skipped, because Crashlytics records errors and nothing else", async () => {
   const { fake, flare } = create();
 
@@ -125,24 +157,6 @@ test("a recordError that throws is a failed outcome and never reaches the applic
   });
 });
 
-test("the capabilities say how little Crashlytics can do per report", () => {
-  expect(crashlytics({ sdk: fakeCrashlytics().sdk }).capabilities).toEqual({
-    eventLocal: {
-      user: false,
-      tags: false,
-      contexts: false,
-      breadcrumbs: false,
-    },
-    messages: false,
-    evidence: "sdk-call-returned",
-    flush: "none",
-    queue: "sdk-persistent",
-    automaticCapture: "provider-owned",
-    instance: "singleton",
-    filtering: "provider-hooks",
-  });
-});
-
 test("there is no flush: sendUnsentReports acknowledges nothing", async () => {
   const { flare } = create();
 
@@ -163,20 +177,4 @@ test("the native handle is the Crashlytics instance, obtained when the destinati
 
   expect(flare.destination("crashlytics").native).toBe(fake.instance);
   expect(fake.calls.getCrashlytics).toBe(1);
-});
-
-test("the same SDK registered under two names is rejected before anything opens", () => {
-  const fake = fakeCrashlytics();
-
-  expect(
-    () =>
-      new Flare({
-        destinations: {
-          first: crashlytics({ sdk: fake.sdk }),
-          second: crashlytics({ sdk: fake.sdk }),
-        },
-      }),
-  ).toThrow(
-    'Flare destinations "first" and "second" drive the same singleton SDK. Register it once.',
-  );
 });

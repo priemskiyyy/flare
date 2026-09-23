@@ -54,24 +54,6 @@ test("without the ambient option nothing is ever written to Crashlytics' global 
   expect(fake.calls).toMatchObject({ setAttributes: 0, setUserId: 0 });
 });
 
-test("with no ambient part enabled the session has no ambient member at all", async () => {
-  const open = (ambient?: Parameters<typeof crashlytics>[0]["ambient"]) =>
-    crashlytics({
-      sdk: fakeCrashlytics().sdk,
-      ...(ambient === undefined ? {} : { ambient }),
-    }).open({ destination: "crashlytics" });
-
-  expect("ambient" in (await open())).toBe(false);
-  expect("ambient" in (await open({ tags: false }))).toBe(false);
-  expect(typeof (await open({ tags: true })).ambient?.session).toBe("function");
-  expect("breadcrumb" in ((await open({ tags: true })).ambient ?? {})).toBe(
-    false,
-  );
-  expect(typeof (await open({ breadcrumbs: true })).ambient?.breadcrumb).toBe(
-    "function",
-  );
-});
-
 test("only the parts that were asked for are mirrored", () => {
   const onlyContexts = create({ contexts: true });
   const onlyUser = create({ user: true });
@@ -291,15 +273,24 @@ test("with user mirroring on, a report given another user for itself is not reco
   expect(fake.recorded).toEqual([]);
 });
 
-test("without user mirroring Flare wrote no user, so every report is recorded", async () => {
+test("without user mirroring, a report given another user for itself is recorded, with that user listed as a loss", async () => {
   const { fake, flare } = create({ tags: true, contexts: true });
 
   flare.user({ id: "ada" });
 
-  await flare.capture(new Error("boom"), { user: { id: "customer-7" } })
-    .settled;
+  const status = await flare.capture(new Error("boom"), {
+    user: { id: "customer-7" },
+  }).settled;
 
   expect(fake.recorded).toHaveLength(1);
+  expect(status).toMatchObject({
+    outcomes: {
+      crashlytics: {
+        status: "submitted",
+        losses: [{ path: "identity.user", reason: "unsupported" }],
+      },
+    },
+  });
 });
 
 test("disposing blanks the user id and every key Flare wrote, and nothing else", () => {

@@ -8,7 +8,7 @@ type Recorded = {
 
 /**
  * The modular React Native Firebase Crashlytics API for the tests. It models
- * the one fact this reporter is built around: `recordError` takes an Error
+ * the one fact this adapter is built around: `recordError` takes an Error
  * and nothing else, and the native SDK attaches the global user id, keys and
  * logs to it by itself.
  */
@@ -34,10 +34,13 @@ export const fakeCrashlytics = () => {
   const recorded: Recorded[] = [];
   const calls = { getCrashlytics: 0, setAttributes: 0, setUserId: 0 };
 
-  const answer = () =>
-    state.rejectSetters
-      ? Promise.reject(new Error("native module failed"))
-      : Promise.resolve(null);
+  const answer = () => {
+    if (state.rejectSetters) {
+      return Promise.reject(new Error("native module failed"));
+    }
+
+    return Promise.resolve(null);
+  };
 
   const sdk = {
     getCrashlytics: () => {
