@@ -1,9 +1,9 @@
 import type { DestinationOutcome } from "@priemskiyyy/flare";
 import type React from "react";
 
+import { DESTINATION_NAMES } from "examples/shared/ledger/constants/destinations";
+import type { LedgerDestination } from "examples/shared/ledger/types/LedgerDestination";
 import { DestinationOutcomeRow } from "src/components/Report/DestinationOutcomeRow";
-import type { LedgerDestination } from "src/types/LedgerDestination";
-import { DESTINATION_NAMES } from "src/utils/constants/destinations";
 
 type ReportFlowProps = {
   outcomes: Partial<Record<LedgerDestination, DestinationOutcome | null>>;

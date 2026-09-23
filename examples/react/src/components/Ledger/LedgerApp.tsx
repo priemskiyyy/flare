@@ -3,16 +3,16 @@ import type { Receipt } from "@priemskiyyy/flare";
 import clsx from "clsx";
 import type React from "react";
 
+import { ACCOUNTS } from "examples/shared/ledger/constants/accounts";
+import type { AccountId } from "examples/shared/ledger/types/AccountId";
+import type { LedgerDestination } from "examples/shared/ledger/types/LedgerDestination";
+import { CARD_CLASS_NAME } from "examples/shared/ui/styles/cardStyles";
 import { EmptyState } from "src/components/EmptyState/EmptyState";
 import { AccountSwitcher } from "src/components/Ledger/AccountSwitcher";
 import { AttachmentUpload } from "src/components/Ledger/AttachmentUpload";
 import { InvoiceList } from "src/components/Ledger/InvoiceList";
 import { InvoicePreview } from "src/components/Ledger/InvoicePreview";
 import { StatusBar } from "src/components/Ledger/StatusBar";
-import { CARD_CLASS_NAME } from "src/styles/cardStyles";
-import type { AccountId } from "src/types/AccountId";
-import type { LedgerDestination } from "src/types/LedgerDestination";
-import { ACCOUNTS } from "src/utils/constants/accounts";
 
 type LedgerAppProps = {
   account: AccountId | null;

@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import type React from "react";
 
-import type { OutcomeStatus } from "src/types/OutcomeStatus";
+import type { OutcomeStatus } from "examples/shared/ledger/types/OutcomeStatus";
 import { OUTCOME_ICONS } from "src/utils/constants/icons";
 
 type OutcomeIconProps = { status: OutcomeStatus };

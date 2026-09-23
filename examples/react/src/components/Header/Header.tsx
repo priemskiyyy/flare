@@ -1,10 +1,10 @@
 import { ArrowCounterClockwise, Flame } from "@phosphor-icons/react";
 import type React from "react";
 
+import { buttonStyles } from "examples/shared/ui/styles/buttonStyles";
 import { FlareStatusBadge } from "src/components/Badge/FlareStatusBadge";
 import { IconTile } from "src/components/IconTile/IconTile";
 import { SectionNav } from "src/components/Section/SectionNav";
-import { buttonStyles } from "src/styles/buttonStyles";
 
 // Nothing outlives the page, so reloading it is a complete reset.
 const handleResetPress = () => {

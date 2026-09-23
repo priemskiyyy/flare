@@ -4,6 +4,14 @@ import { FlareProvider } from "@priemskiyyy/flare-react";
 import type React from "react";
 import { useEffect, useState } from "react";
 
+import { INITIAL_ACCOUNT } from "examples/shared/ledger/constants/accounts";
+import { createLedgerRuntime } from "examples/shared/ledger/reporting/createLedgerRuntime";
+import type { AccountId } from "examples/shared/ledger/types/AccountId";
+import type { LedgerDestination } from "examples/shared/ledger/types/LedgerDestination";
+import type { LedgerRuntime } from "examples/shared/ledger/types/LedgerRuntime";
+import type { ReportBackend } from "examples/shared/ledger/types/ReportBackend";
+import type { SimulatedProviders } from "examples/shared/ledger/types/SimulatedProviders";
+import { switchAccount } from "examples/shared/ledger/utils/switchAccount";
 import { DestinationsPanel } from "src/components/Destinations/DestinationsPanel";
 import { Footer } from "src/components/Footer/Footer";
 import { Header } from "src/components/Header/Header";
@@ -15,14 +23,6 @@ import { ReceiptsPanel } from "src/components/Receipts/ReceiptsPanel";
 import { LatestReportPanel } from "src/components/Report/LatestReportPanel";
 import { Section } from "src/components/Section/Section";
 import { TimelinePanel } from "src/components/Timeline/TimelinePanel";
-import { createLedgerRuntime } from "src/reporting/createLedgerRuntime";
-import type { AccountId } from "src/types/AccountId";
-import type { LedgerDestination } from "src/types/LedgerDestination";
-import type { LedgerRuntime } from "src/types/LedgerRuntime";
-import type { ReportBackend } from "src/types/ReportBackend";
-import type { SimulatedProviders } from "src/types/SimulatedProviders";
-import { INITIAL_ACCOUNT } from "src/utils/constants/accounts";
-import { switchAccount } from "src/utils/switchAccount";
 
 type ApplicationProps = {
   backend: ReportBackend;

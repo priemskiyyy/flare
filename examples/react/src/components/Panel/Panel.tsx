@@ -3,8 +3,8 @@ import clsx from "clsx";
 import type React from "react";
 import type { ReactNode } from "react";
 
+import { CARD_CLASS_NAME } from "examples/shared/ui/styles/cardStyles";
 import { IconTile } from "src/components/IconTile/IconTile";
-import { CARD_CLASS_NAME } from "src/styles/cardStyles";
 
 type PanelProps = {
   title: string;

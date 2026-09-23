@@ -158,42 +158,27 @@ importers:
       '@priemskiyyy/flare':
         specifier: workspace:*
         version: link:../../packages/core
-      '@priemskiyyy/flare-console':
-        specifier: workspace:*
-        version: link:../../packages/adapters/console
-      '@priemskiyyy/flare-datadog':
-        specifier: workspace:*
-        version: link:../../packages/adapters/datadog
       '@priemskiyyy/flare-devtools':
         specifier: workspace:*
         version: link:../../packages/devtools
-      '@priemskiyyy/flare-http':
-        specifier: workspace:*
-        version: link:../../packages/adapters/http
-      '@priemskiyyy/flare-posthog':
-        specifier: workspace:*
-        version: link:../../packages/adapters/posthog
       '@priemskiyyy/flare-react':
         specifier: workspace:*
         version: link:../../packages/react
-      '@priemskiyyy/flare-sentry':
-        specifier: workspace:*
-        version: link:../../packages/adapters/sentry
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1
       clsx:
         specifier: 2.1.1
         version: 2.1.1
+      example-shared:
+        specifier: workspace:*
+        version: link:../shared
       react:
         specifier: 19.2.8
         version: 19.2.8
       react-dom:
         specifier: 19.2.8
         version: 19.2.8(react@19.2.8)
-      zod:
-        specifier: 4.1.12
-        version: 4.1.12
     devDependencies:
       '@tailwindcss/vite':
         specifier: 4.3.3
@@ -213,6 +198,33 @@ importers:
       vite:
         specifier: 8.3.0
         version: 8.3.0(@types/node@22.20.2)(jiti@2.7.0)(terser@5.51.2)
+
+  examples/shared:
+    dependencies:
+      '@priemskiyyy/flare':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@priemskiyyy/flare-console':
+        specifier: workspace:*
+        version: link:../../packages/adapters/console
+      '@priemskiyyy/flare-datadog':
+        specifier: workspace:*
+        version: link:../../packages/adapters/datadog
+      '@priemskiyyy/flare-http':
+        specifier: workspace:*
+        version: link:../../packages/adapters/http
+      '@priemskiyyy/flare-posthog':
+        specifier: workspace:*
+        version: link:../../packages/adapters/posthog
+      '@priemskiyyy/flare-sentry':
+        specifier: workspace:*
+        version: link:../../packages/adapters/sentry
+      class-variance-authority:
+        specifier: 0.7.1
+        version: 0.7.1
+      zod:
+        specifier: 4.1.12
+        version: 4.1.12
 
   packages/adapters/bugsnag:
     dependencies:

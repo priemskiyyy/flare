@@ -1,15 +1,15 @@
 import { Broadcast } from "@phosphor-icons/react";
 import type React from "react";
 
+import { formatAccount } from "examples/shared/ledger/formatting/formatAccount";
+import { formatClockTime } from "examples/shared/ledger/formatting/formatClockTime";
+import { formatShortId } from "examples/shared/ledger/formatting/formatShortId";
+import type { LedgerRuntime } from "examples/shared/ledger/types/LedgerRuntime";
 import { ReceiptStateBadge } from "src/components/Badge/ReceiptStateBadge";
 import { EmptyState } from "src/components/EmptyState/EmptyState";
 import { Panel } from "src/components/Panel/Panel";
 import { ReportDetails } from "src/components/Report/ReportDetails";
-import { formatAccount } from "src/formatting/formatAccount";
-import { formatClockTime } from "src/formatting/formatClockTime";
-import { formatShortId } from "src/formatting/formatShortId";
 import { useEventLog } from "src/hooks/useEventLog";
-import type { LedgerRuntime } from "src/types/LedgerRuntime";
 
 type LatestReportPanelProps = { runtime: LedgerRuntime };
 

@@ -1,9 +1,12 @@
 import type React from "react";
 
-import { PILL_CLASS_NAME } from "src/styles/pillStyles";
-import { segmentStyles } from "src/styles/segmentStyles";
-import type { AccountId } from "src/types/AccountId";
-import { ACCOUNT_IDS, ACCOUNTS } from "src/utils/constants/accounts";
+import {
+  ACCOUNT_IDS,
+  ACCOUNTS,
+} from "examples/shared/ledger/constants/accounts";
+import type { AccountId } from "examples/shared/ledger/types/AccountId";
+import { PILL_CLASS_NAME } from "examples/shared/ui/styles/pillStyles";
+import { segmentStyles } from "examples/shared/ui/styles/segmentStyles";
 
 type AccountSwitcherProps = {
   account: AccountId | null;

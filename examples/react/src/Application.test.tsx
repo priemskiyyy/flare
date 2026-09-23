@@ -9,9 +9,9 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
+import type { LedgerRuntime } from "examples/shared/ledger/types/LedgerRuntime";
+import { startLedger } from "examples/shared/ledger/utils/startLedger";
 import { Application } from "src/Application";
-import type { LedgerRuntime } from "src/types/LedgerRuntime";
-import { startLedger } from "src/utils/startLedger";
 
 class IntersectionObserverStub {
   observe() {}

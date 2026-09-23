@@ -3,17 +3,17 @@ import { useDestinationStatus } from "@priemskiyyy/flare-react";
 import clsx from "clsx";
 import type React from "react";
 
-import { Badge } from "src/components/Badge/Badge";
-import { IconTile } from "src/components/IconTile/IconTile";
-import { CARD_CLASS_NAME } from "src/styles/cardStyles";
-import type { LedgerDestination } from "src/types/LedgerDestination";
 import {
   BILLING_DESTINATIONS,
   DESTINATION_GUIDES,
-} from "src/utils/constants/destinations";
+} from "examples/shared/ledger/constants/destinations";
+import { DESTINATION_STATUS_LABELS } from "examples/shared/ledger/constants/labels";
+import type { LedgerDestination } from "examples/shared/ledger/types/LedgerDestination";
+import { DESTINATION_STATUS_TONES } from "examples/shared/ui/constants/tones";
+import { CARD_CLASS_NAME } from "examples/shared/ui/styles/cardStyles";
+import { Badge } from "src/components/Badge/Badge";
+import { IconTile } from "src/components/IconTile/IconTile";
 import { DESTINATION_ICONS } from "src/utils/constants/icons";
-import { DESTINATION_STATUS_LABELS } from "src/utils/constants/labels";
-import { DESTINATION_STATUS_TONES } from "src/utils/constants/tones";
 
 type DestinationCardProps = {
   name: LedgerDestination;

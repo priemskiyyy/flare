@@ -1,0 +1,34 @@
+@source "./";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --animate-flash: flash 1.2s ease-out;
+
+  @keyframes flash {
+    from {
+      background-color: rgb(217 119 6 / 0.28);
+    }
+  }
+}
+
+:root {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  @apply min-h-dvh bg-stone-50 text-stone-900 antialiased dark:bg-stone-950 dark:text-stone-100;
+  background-image:
+    radial-gradient(
+      60rem 30rem at 10% -10%,
+      rgb(217 119 6 / 0.12),
+      transparent
+    ),
+    radial-gradient(50rem 30rem at 100% 0%, rgb(244 63 94 / 0.08), transparent);
+}

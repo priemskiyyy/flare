@@ -4,8 +4,8 @@ import { useFlare } from "@priemskiyyy/flare-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 
-import { buttonStyles } from "src/styles/buttonStyles";
-import type { LedgerDestination } from "src/types/LedgerDestination";
+import type { LedgerDestination } from "examples/shared/ledger/types/LedgerDestination";
+import { buttonStyles } from "examples/shared/ui/styles/buttonStyles";
 
 const UPLOAD_DURATION = 3_000;
 

@@ -2,14 +2,14 @@ import type { DestinationOutcome } from "@priemskiyyy/flare";
 import clsx from "clsx";
 import type React from "react";
 
+import { DESTINATION_GUIDES } from "examples/shared/ledger/constants/destinations";
+import { explainOutcome } from "examples/shared/ledger/formatting/explainOutcome";
+import type { LedgerDestination } from "examples/shared/ledger/types/LedgerDestination";
+import { getOutcomeCode } from "examples/shared/ledger/utils/getOutcomeCode";
+import { getOutcomeStatus } from "examples/shared/ledger/utils/getOutcomeStatus";
+import { CODE_CLASS_NAME } from "examples/shared/ui/styles/codeStyles";
 import { OutcomeBadge } from "src/components/Badge/OutcomeBadge";
-import { explainOutcome } from "src/formatting/explainOutcome";
-import { CODE_CLASS_NAME } from "src/styles/codeStyles";
-import type { LedgerDestination } from "src/types/LedgerDestination";
-import { DESTINATION_GUIDES } from "src/utils/constants/destinations";
 import { DESTINATION_ICONS } from "src/utils/constants/icons";
-import { getOutcomeCode } from "src/utils/getOutcomeCode";
-import { getOutcomeStatus } from "src/utils/getOutcomeStatus";
 
 type DestinationOutcomeRowProps = {
   destination: LedgerDestination;

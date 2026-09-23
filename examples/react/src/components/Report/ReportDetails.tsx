@@ -2,12 +2,12 @@ import { Prohibit } from "@phosphor-icons/react";
 import type { Receipt, SanitizedReport } from "@priemskiyyy/flare";
 import type React from "react";
 
+import { explainDrop } from "examples/shared/ledger/formatting/explainDrop";
+import type { LedgerDestination } from "examples/shared/ledger/types/LedgerDestination";
+import { CODE_CLASS_NAME } from "examples/shared/ui/styles/codeStyles";
 import { ReportFlow } from "src/components/Report/ReportFlow";
 import { SanitizedPayload } from "src/components/Report/SanitizedPayload";
-import { explainDrop } from "src/formatting/explainDrop";
 import { useObservable } from "src/hooks/useObservable";
-import { CODE_CLASS_NAME } from "src/styles/codeStyles";
-import type { LedgerDestination } from "src/types/LedgerDestination";
 
 type ReportDetailsProps = {
   receipt: Receipt<LedgerDestination>;

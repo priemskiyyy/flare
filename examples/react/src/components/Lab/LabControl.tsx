@@ -2,7 +2,7 @@ import type { Icon } from "@phosphor-icons/react";
 import type React from "react";
 import { useId } from "react";
 
-import { buttonStyles } from "src/styles/buttonStyles";
+import { buttonStyles } from "examples/shared/ui/styles/buttonStyles";
 
 type LabControlProps = {
   icon: Icon;

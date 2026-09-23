@@ -1,5 +1,5 @@
-import { PILL_CLASS_NAME } from "src/styles/pillStyles";
-import { segmentStyles } from "src/styles/segmentStyles";
+import { PILL_CLASS_NAME } from "examples/shared/ui/styles/pillStyles";
+import { segmentStyles } from "examples/shared/ui/styles/segmentStyles";
 import type { Option } from "src/types/Option";
 
 type SegmentedControlProps<T extends string | number> = {

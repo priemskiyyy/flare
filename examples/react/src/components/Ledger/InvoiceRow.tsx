@@ -3,11 +3,11 @@ import type { Receipt } from "@priemskiyyy/flare";
 import { useFlare } from "@priemskiyyy/flare-react";
 import type React from "react";
 
-import { formatMoney } from "src/formatting/formatMoney";
-import { buttonStyles } from "src/styles/buttonStyles";
-import type { Invoice } from "src/types/Invoice";
-import type { LedgerDestination } from "src/types/LedgerDestination";
-import { PaymentDeclinedError } from "src/utils/PaymentDeclinedError";
+import { formatMoney } from "examples/shared/ledger/formatting/formatMoney";
+import type { Invoice } from "examples/shared/ledger/types/Invoice";
+import type { LedgerDestination } from "examples/shared/ledger/types/LedgerDestination";
+import { PaymentDeclinedError } from "examples/shared/ledger/utils/PaymentDeclinedError";
+import { buttonStyles } from "examples/shared/ui/styles/buttonStyles";
 
 type InvoiceRowProps = {
   invoice: Invoice;

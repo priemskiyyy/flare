@@ -2,12 +2,12 @@ import { ClockCounterClockwise, Play, Power } from "@phosphor-icons/react";
 import { useFlareStatus } from "@priemskiyyy/flare-react";
 import type React from "react";
 
+import type { LedgerRuntime } from "examples/shared/ledger/types/LedgerRuntime";
+import { buttonStyles } from "examples/shared/ui/styles/buttonStyles";
 import { EmptyState } from "src/components/EmptyState/EmptyState";
 import { Panel } from "src/components/Panel/Panel";
 import { TimelineRow } from "src/components/Timeline/TimelineRow";
 import { useEventLog } from "src/hooks/useEventLog";
-import { buttonStyles } from "src/styles/buttonStyles";
-import type { LedgerRuntime } from "src/types/LedgerRuntime";
 
 type TimelinePanelProps = {
   runtime: LedgerRuntime;

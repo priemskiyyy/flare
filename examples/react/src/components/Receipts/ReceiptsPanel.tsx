@@ -1,13 +1,13 @@
 import { Eraser, Receipt } from "@phosphor-icons/react";
 import type React from "react";
 
+import type { LedgerRuntime } from "examples/shared/ledger/types/LedgerRuntime";
+import { buttonStyles } from "examples/shared/ui/styles/buttonStyles";
 import { EmptyState } from "src/components/EmptyState/EmptyState";
 import { Panel } from "src/components/Panel/Panel";
 import { ReceiptRow } from "src/components/Receipts/ReceiptRow";
 import { OutcomeLegend } from "src/components/Report/OutcomeLegend";
 import { useEventLog } from "src/hooks/useEventLog";
-import { buttonStyles } from "src/styles/buttonStyles";
-import type { LedgerRuntime } from "src/types/LedgerRuntime";
 
 type ReceiptsPanelProps = { runtime: LedgerRuntime };
 

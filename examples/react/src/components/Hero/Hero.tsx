@@ -1,8 +1,8 @@
 import { Flask, Lightning } from "@phosphor-icons/react";
 import type React from "react";
 
+import { buttonStyles } from "examples/shared/ui/styles/buttonStyles";
 import { HeroStep } from "src/components/Hero/HeroStep";
-import { buttonStyles } from "src/styles/buttonStyles";
 import { scrollToElement } from "src/utils/scrollToElement";
 
 export const Hero: React.FunctionComponent = () => (

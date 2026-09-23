@@ -11,18 +11,13 @@
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",
     "@priemskiyyy/flare": "workspace:*",
-    "@priemskiyyy/flare-console": "workspace:*",
-    "@priemskiyyy/flare-datadog": "workspace:*",
     "@priemskiyyy/flare-devtools": "workspace:*",
-    "@priemskiyyy/flare-http": "workspace:*",
-    "@priemskiyyy/flare-posthog": "workspace:*",
     "@priemskiyyy/flare-react": "workspace:*",
-    "@priemskiyyy/flare-sentry": "workspace:*",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "example-shared": "workspace:*",
     "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "zod": "4.1.12"
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",

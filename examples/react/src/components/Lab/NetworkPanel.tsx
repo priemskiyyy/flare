@@ -1,15 +1,15 @@
 import { Eraser, Terminal } from "@phosphor-icons/react";
 import type React from "react";
 
+import { REQUEST_LABELS } from "examples/shared/ledger/constants/labels";
+import { formatDuration } from "examples/shared/ledger/formatting/formatDuration";
+import type { ReportBackend } from "examples/shared/ledger/types/ReportBackend";
+import { REQUEST_TONES } from "examples/shared/ui/constants/tones";
+import { buttonStyles } from "examples/shared/ui/styles/buttonStyles";
 import { Badge } from "src/components/Badge/Badge";
 import { EmptyState } from "src/components/EmptyState/EmptyState";
 import { Panel } from "src/components/Panel/Panel";
-import { formatDuration } from "src/formatting/formatDuration";
 import { useEventLog } from "src/hooks/useEventLog";
-import { buttonStyles } from "src/styles/buttonStyles";
-import type { ReportBackend } from "src/types/ReportBackend";
-import { REQUEST_LABELS } from "src/utils/constants/labels";
-import { REQUEST_TONES } from "src/utils/constants/tones";
 
 type NetworkPanelProps = { backend: ReportBackend };
 

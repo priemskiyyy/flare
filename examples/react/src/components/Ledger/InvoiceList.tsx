@@ -1,10 +1,10 @@
 import type { Receipt } from "@priemskiyyy/flare";
 import type React from "react";
 
+import { INVOICES } from "examples/shared/ledger/constants/invoices";
+import type { AccountId } from "examples/shared/ledger/types/AccountId";
+import type { LedgerDestination } from "examples/shared/ledger/types/LedgerDestination";
 import { InvoiceRow } from "src/components/Ledger/InvoiceRow";
-import type { AccountId } from "src/types/AccountId";
-import type { LedgerDestination } from "src/types/LedgerDestination";
-import { INVOICES } from "src/utils/constants/invoices";
 
 type InvoiceListProps = {
   account: AccountId;

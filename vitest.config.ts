@@ -58,25 +58,32 @@ const devtoolsProject: TestProjectConfiguration = {
   },
 };
 
-// The example is tested like an application: through its buttons, over the
-// built packages it imports by name.
-const exampleProject: TestProjectConfiguration = {
-  extends: true,
-  resolve: {
-    alias: {
-      src: fileURLToPath(new URL("./examples/react/src", import.meta.url)),
+const exampleAliases = (name: string) => ({
+  src: fileURLToPath(new URL(`./examples/${name}/src`, import.meta.url)),
+  "examples/shared": fileURLToPath(
+    new URL("./examples/shared", import.meta.url),
+  ),
+});
+
+// The examples are tested like applications: through their buttons, over the
+// built packages they import by name.
+const exampleProjects: TestProjectConfiguration[] = [
+  {
+    extends: true,
+    resolve: {
+      alias: exampleAliases("react"),
+      dedupe: ["react", "react-dom"],
     },
-    dedupe: ["react", "react-dom"],
+    test: {
+      name: "example-react",
+      include: ["examples/react/src/**/*.test.{ts,tsx}"],
+      environment: "jsdom",
+      // Node would load the icons with their own React; through Vite they share
+      // the deduplicated one, as CI's React version swap needs.
+      server: { deps: { inline: ["@phosphor-icons/react"] } },
+    },
   },
-  test: {
-    name: "example-react",
-    include: ["examples/react/src/**/*.test.{ts,tsx}"],
-    environment: "jsdom",
-    // Node would load the icons with their own React; through Vite they share
-    // the deduplicated one, as CI's React version swap needs.
-    server: { deps: { inline: ["@phosphor-icons/react"] } },
-  },
-};
+];
 
 // Every adapter is an ordinary node project named after its folder, so a new
 // one is tested without being listed here.
@@ -175,7 +182,7 @@ export default defineConfig({
       devtoolsProject,
       project("packages", "trace"),
       ...adapterProjects,
-      exampleProject,
+      ...exampleProjects,
     ],
   },
 });

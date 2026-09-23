@@ -2,23 +2,23 @@ import { CaretRight } from "@phosphor-icons/react";
 import type { Receipt, SanitizedReport } from "@priemskiyyy/flare";
 import type React from "react";
 
+import {
+  DESTINATION_GUIDES,
+  DESTINATION_NAMES,
+} from "examples/shared/ledger/constants/destinations";
+import { OUTCOME_LABELS } from "examples/shared/ledger/constants/labels";
+import { formatAccount } from "examples/shared/ledger/formatting/formatAccount";
+import { formatClockTime } from "examples/shared/ledger/formatting/formatClockTime";
+import { formatShortId } from "examples/shared/ledger/formatting/formatShortId";
+import type { LedgerDestination } from "examples/shared/ledger/types/LedgerDestination";
+import type { TrackedReceipt } from "examples/shared/ledger/types/TrackedReceipt";
+import { getOutcomeStatus } from "examples/shared/ledger/utils/getOutcomeStatus";
+import { OUTCOME_TONES } from "examples/shared/ui/constants/tones";
 import { Badge } from "src/components/Badge/Badge";
 import { OutcomeIcon } from "src/components/Badge/OutcomeIcon";
 import { ReceiptStateBadge } from "src/components/Badge/ReceiptStateBadge";
 import { ReportDetails } from "src/components/Report/ReportDetails";
-import { formatAccount } from "src/formatting/formatAccount";
-import { formatClockTime } from "src/formatting/formatClockTime";
-import { formatShortId } from "src/formatting/formatShortId";
 import { useObservable } from "src/hooks/useObservable";
-import type { LedgerDestination } from "src/types/LedgerDestination";
-import type { TrackedReceipt } from "src/types/TrackedReceipt";
-import {
-  DESTINATION_GUIDES,
-  DESTINATION_NAMES,
-} from "src/utils/constants/destinations";
-import { OUTCOME_LABELS } from "src/utils/constants/labels";
-import { OUTCOME_TONES } from "src/utils/constants/tones";
-import { getOutcomeStatus } from "src/utils/getOutcomeStatus";
 
 type ReceiptRowProps = {
   tracked: TrackedReceipt;

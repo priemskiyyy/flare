@@ -1,8 +1,8 @@
 import type React from "react";
 import type { ReactNode } from "react";
 
-import { badgeStyles } from "src/styles/badgeStyles";
-import type { Tone } from "src/types/Tone";
+import { badgeStyles } from "examples/shared/ui/styles/badgeStyles";
+import type { Tone } from "examples/shared/ui/types/Tone";
 
 type BadgeProps = { tone: Tone; children: ReactNode };
 

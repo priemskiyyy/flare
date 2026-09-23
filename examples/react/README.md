@@ -24,22 +24,24 @@ The page walks through five sections, each with a "Try this" hint:
 
 ## How it fits together
 
-| File                                    | Role                                                                                              |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `src/main.tsx`                          | Starts Ledger once, outside React, and renders it.                                                |
-| `src/utils/startLedger.ts`              | Creates the backend, the SDKs and the first runtime, signs Ada in and starts it, as the tests do. |
-| `src/reporting/createLedgerFlare.ts`    | The destinations, `defaults.to`, the Zod schema, redaction, scrubbing and the timeout.            |
-| `src/reporting/createLedgerRuntime.ts`  | One Flare with its receipts, console lines and diagnostics timeline. A restart is a new one.      |
-| `src/backend/createReportBackend.ts`    | Your API and its client: latency, an outage, a single failure, and the network log.               |
-| `src/providers/`                        | The simulated Sentry, PostHog and Datadog SDKs, each typed with its adapter's `*Like` type.       |
-| `src/utils/switchAccount.ts`            | What the app does on sign-in: PostHog and Datadog get the user too, as they need.                 |
-| `src/components/Ledger/`                | The product: capture, message, a scope, and `FlareErrorBoundary`.                                 |
-| `src/components/Report/`                | The latest report and each receipt's detail: every destination's answer, and the payload.         |
-| `src/formatting/`                       | Outcomes, drop reasons and diagnostic events in plain words.                                      |
-| `src/components/Receipts/`, `Timeline/` | Observable receipts and diagnostics, read with `useSyncExternalStore`.                            |
-| `src/Application.test.tsx`              | The flows driven through the buttons, with a fresh backend and runtime per test.                  |
+The domain lives in `examples/shared`, the `example-shared` workspace package. This folder is the React page over it.
 
-Styling is Tailwind with a few `class-variance-authority` recipes in `src/styles/`, and icons come from Phosphor, as in the sibling libraries' examples.
+| File                                                | Role                                                                                                  |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `src/main.tsx`                                      | Starts Ledger once, outside React, and renders it.                                                    |
+| `../shared/ledger/utils/startLedger.ts`             | Creates the backend, the SDKs and the first runtime, signs Ada in and starts it, as the tests do.     |
+| `../shared/ledger/reporting/createLedgerFlare.ts`   | The destinations, `defaults.to`, the Zod schema and privacy rules from `constants/`, and the timeout. |
+| `../shared/ledger/reporting/createLedgerRuntime.ts` | One Flare with its receipts, console lines and diagnostics timeline. A restart is a new one.          |
+| `../shared/ledger/backend/createReportBackend.ts`   | Your API and its client: latency, an outage, a single failure, and the network log.                   |
+| `../shared/ledger/providers/`                       | The simulated Sentry, PostHog and Datadog SDKs, each typed with its adapter's `*Like` type.           |
+| `../shared/ledger/utils/switchAccount.ts`           | What the app does on sign-in: PostHog and Datadog get the user too, as they need.                     |
+| `src/components/Ledger/`                            | The product: capture, message, a scope, and `FlareErrorBoundary`.                                     |
+| `src/components/Report/`                            | The latest report and each receipt's detail: every destination's answer, and the payload.             |
+| `../shared/ledger/formatting/`                      | Outcomes, drop reasons and diagnostic events in plain words.                                          |
+| `src/components/Receipts/`, `Timeline/`             | Observable receipts and diagnostics, read with `useSyncExternalStore`.                                |
+| `src/Application.test.tsx`                          | The flows driven through the buttons, with a fresh backend and runtime per test.                      |
+
+Styling is Tailwind with a few `class-variance-authority` recipes in `../shared/ui/styles/`, and icons come from Phosphor, as in the sibling libraries' examples.
 
 ## Using a real provider
 

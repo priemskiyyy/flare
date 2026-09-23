@@ -40,7 +40,7 @@ The page walks through five sections, each with a "Try this" hint:
 
 ## What it configures
 
-`src/reporting/createLedgerFlare.ts` holds all of Ledger's reporting:
+`examples/shared/ledger/reporting/createLedgerFlare.ts` holds all of Ledger's reporting, with its schema and privacy rules beside it in `constants/`:
 
 - a [`defaults.to`](routing.md) function that sends reports tagged `area: "billing"` to your API, Sentry and the console, and everything else elsewhere
 - a Zod [schema](metadata.md#typing-them) for its tags, contexts and breadcrumbs, including the `react` context the error boundary adds

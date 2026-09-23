@@ -1,9 +1,9 @@
 import type React from "react";
 
+import { describeTimelineEntry } from "examples/shared/ledger/formatting/describeTimelineEntry";
+import { formatClockTime } from "examples/shared/ledger/formatting/formatClockTime";
+import type { TimelineEntry } from "examples/shared/ledger/types/TimelineEntry";
 import { Badge } from "src/components/Badge/Badge";
-import { describeTimelineEntry } from "src/formatting/describeTimelineEntry";
-import { formatClockTime } from "src/formatting/formatClockTime";
-import type { TimelineEntry } from "src/types/TimelineEntry";
 
 type TimelineRowProps = { entry: TimelineEntry };
 

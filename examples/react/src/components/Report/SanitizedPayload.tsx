@@ -2,8 +2,8 @@ import { CaretRight, ShieldCheck } from "@phosphor-icons/react";
 import type { SanitizedReport } from "@priemskiyyy/flare";
 import type React from "react";
 
+import { formatJson } from "examples/shared/ledger/formatting/formatJson";
 import { Badge } from "src/components/Badge/Badge";
-import { formatJson } from "src/formatting/formatJson";
 
 // What Flare's redaction and Ledger's scrubbing write in place of a value.
 const REWRITTEN = /(\[Redacted\]|\[email\])/;

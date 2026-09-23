@@ -1,10 +1,10 @@
 import type React from "react";
 
+import { OUTCOME_LABELS } from "examples/shared/ledger/constants/labels";
+import type { OutcomeStatus } from "examples/shared/ledger/types/OutcomeStatus";
+import { OUTCOME_TONES } from "examples/shared/ui/constants/tones";
 import { Badge } from "src/components/Badge/Badge";
 import { OutcomeIcon } from "src/components/Badge/OutcomeIcon";
-import type { OutcomeStatus } from "src/types/OutcomeStatus";
-import { OUTCOME_LABELS } from "src/utils/constants/labels";
-import { OUTCOME_TONES } from "src/utils/constants/tones";
 
 type OutcomeBadgeProps = { status: OutcomeStatus };
 

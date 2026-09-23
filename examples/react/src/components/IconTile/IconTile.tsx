@@ -1,7 +1,7 @@
 import type { Icon } from "@phosphor-icons/react";
 import type React from "react";
 
-import { iconTileStyles } from "src/styles/iconTileStyles";
+import { iconTileStyles } from "examples/shared/ui/styles/iconTileStyles";
 
 type IconTileProps = { icon: Icon; size: "regular" | "small" };
 

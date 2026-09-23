@@ -4,16 +4,16 @@ import { useFlare } from "@priemskiyyy/flare-react";
 import type React from "react";
 import { useState } from "react";
 
+import { DESTINATION_NAMES } from "examples/shared/ledger/constants/destinations";
+import type { LedgerDestination } from "examples/shared/ledger/types/LedgerDestination";
+import type { LedgerRuntime } from "examples/shared/ledger/types/LedgerRuntime";
+import type { ReportBackend } from "examples/shared/ledger/types/ReportBackend";
+import type { SimulatedProviders } from "examples/shared/ledger/types/SimulatedProviders";
+import { assertUnreachable } from "examples/shared/ledger/utils/assertUnreachable";
+import { buttonStyles } from "examples/shared/ui/styles/buttonStyles";
 import { DestinationCard } from "src/components/Destinations/DestinationCard";
 import { Panel } from "src/components/Panel/Panel";
 import { useEventLog } from "src/hooks/useEventLog";
-import { buttonStyles } from "src/styles/buttonStyles";
-import type { LedgerDestination } from "src/types/LedgerDestination";
-import type { LedgerRuntime } from "src/types/LedgerRuntime";
-import type { ReportBackend } from "src/types/ReportBackend";
-import type { SimulatedProviders } from "src/types/SimulatedProviders";
-import { assertUnreachable } from "src/utils/assertUnreachable";
-import { DESTINATION_NAMES } from "src/utils/constants/destinations";
 
 type DestinationsPanelProps = {
   runtime: LedgerRuntime;

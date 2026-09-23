@@ -14,8 +14,8 @@ import {
 } from "@phosphor-icons/react";
 import type { Icon } from "@phosphor-icons/react";
 
-import type { LedgerDestination } from "src/types/LedgerDestination";
-import type { OutcomeStatus } from "src/types/OutcomeStatus";
+import type { LedgerDestination } from "examples/shared/ledger/types/LedgerDestination";
+import type { OutcomeStatus } from "examples/shared/ledger/types/OutcomeStatus";
 
 export const DESTINATION_ICONS: Record<LedgerDestination, Icon> = {
   backend: Database,

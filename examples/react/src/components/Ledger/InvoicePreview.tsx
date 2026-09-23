@@ -4,9 +4,9 @@ import { FlareErrorBoundary } from "@priemskiyyy/flare-react";
 import type React from "react";
 import { useState } from "react";
 
+import type { LedgerDestination } from "examples/shared/ledger/types/LedgerDestination";
+import { buttonStyles } from "examples/shared/ui/styles/buttonStyles";
 import { InvoiceDocument } from "src/components/Ledger/InvoiceDocument";
-import { buttonStyles } from "src/styles/buttonStyles";
-import type { LedgerDestination } from "src/types/LedgerDestination";
 
 type InvoicePreviewProps = {
   onReceipt: (receipt: Receipt<LedgerDestination>, action: string) => void;

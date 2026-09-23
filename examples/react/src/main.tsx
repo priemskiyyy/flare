@@ -1,8 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
+import { startLedger } from "examples/shared/ledger/utils/startLedger";
 import { Application } from "src/Application";
-import { startLedger } from "src/utils/startLedger";
 import "src/styles.css";
 
 const root = document.getElementById("root");

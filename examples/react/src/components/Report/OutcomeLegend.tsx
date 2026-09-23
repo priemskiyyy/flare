@@ -1,7 +1,10 @@
 import type React from "react";
 
+import {
+  OUTCOME_MEANINGS,
+  OUTCOME_ORDER,
+} from "examples/shared/ledger/constants/labels";
 import { OutcomeBadge } from "src/components/Badge/OutcomeBadge";
-import { OUTCOME_MEANINGS, OUTCOME_ORDER } from "src/utils/constants/labels";
 
 export const OutcomeLegend: React.FunctionComponent = () => (
   <div className="flex flex-col gap-3 rounded-xl bg-stone-100/70 p-4 dark:bg-stone-800/40">

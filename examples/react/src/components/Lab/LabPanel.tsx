@@ -11,14 +11,14 @@ import type { Receipt } from "@priemskiyyy/flare";
 import clsx from "clsx";
 import type React from "react";
 
+import type { LedgerDestination } from "examples/shared/ledger/types/LedgerDestination";
+import type { ReportBackend } from "examples/shared/ledger/types/ReportBackend";
+import type { SimulatedProviders } from "examples/shared/ledger/types/SimulatedProviders";
+import { CARD_CLASS_NAME } from "examples/shared/ui/styles/cardStyles";
 import { LabControl } from "src/components/Lab/LabControl";
 import { LabField } from "src/components/Lab/LabField";
 import { SegmentedControl } from "src/components/SegmentedControl/SegmentedControl";
 import { useObservable } from "src/hooks/useObservable";
-import { CARD_CLASS_NAME } from "src/styles/cardStyles";
-import type { LedgerDestination } from "src/types/LedgerDestination";
-import type { ReportBackend } from "src/types/ReportBackend";
-import type { SimulatedProviders } from "src/types/SimulatedProviders";
 import { LATENCY_OPTIONS } from "src/utils/constants/labOptions";
 
 type LabPanelProps = {

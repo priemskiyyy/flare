@@ -1,10 +1,10 @@
 import { useFlareStatus } from "@priemskiyyy/flare-react";
 import type React from "react";
 
+import { FLARE_STATUS_LABELS } from "examples/shared/ledger/constants/labels";
+import { FLARE_STATUS_TONES } from "examples/shared/ui/constants/tones";
+import { dotStyles } from "examples/shared/ui/styles/dotStyles";
 import { Badge } from "src/components/Badge/Badge";
-import { dotStyles } from "src/styles/dotStyles";
-import { FLARE_STATUS_LABELS } from "src/utils/constants/labels";
-import { FLARE_STATUS_TONES } from "src/utils/constants/tones";
 
 export const FlareStatusBadge: React.FunctionComponent = () => {
   const { state } = useFlareStatus();

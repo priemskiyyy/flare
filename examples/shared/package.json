@@ -1,0 +1,19 @@
+{
+  "name": "example-shared",
+  "private": true,
+  "type": "module",
+  "description": "The Ledger domain and UI recipes the examples share: accounts, invoices, your API, the simulated provider SDKs, the Flare configuration and the Tailwind styles.",
+  "scripts": {
+    "lint:typescript": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@priemskiyyy/flare": "workspace:*",
+    "@priemskiyyy/flare-console": "workspace:*",
+    "@priemskiyyy/flare-datadog": "workspace:*",
+    "@priemskiyyy/flare-http": "workspace:*",
+    "@priemskiyyy/flare-posthog": "workspace:*",
+    "@priemskiyyy/flare-sentry": "workspace:*",
+    "class-variance-authority": "0.7.1",
+    "zod": "4.1.12"
+  }
+}
