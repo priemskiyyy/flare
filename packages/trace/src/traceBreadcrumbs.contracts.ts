@@ -44,7 +44,13 @@ export const stopTyped: () => void = traceBreadcrumbs({
       name: "checkoutStarted",
       data: { cartId, large: total > 100 },
     }),
-    "page.viewed": ({ path }) => (path === "/" ? null : { name: "pageViewed" }),
+    "page.viewed": ({ path }) => {
+      if (path === "/") {
+        return null;
+      }
+
+      return { name: "pageViewed" };
+    },
   },
 });
 
