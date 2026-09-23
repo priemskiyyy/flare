@@ -1,14 +1,8 @@
 import type { SanitizedReport } from "@priemskiyyy/flare";
 
-import { assertUnreachable } from "src/utils/assertUnreachable";
-
 const describeSubject = (report: SanitizedReport) => {
   if (report.kind === "message") {
     return report.message;
-  }
-
-  if (report.kind !== "exception") {
-    return assertUnreachable(report);
   }
 
   const { name, message } = report.exception;

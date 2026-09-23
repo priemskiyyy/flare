@@ -3,10 +3,10 @@ import { expect, test } from "vitest";
 
 import { formatReportLine } from "src/formatting/formatReportLine";
 
-const base = {
+const base: Omit<SanitizedReport, "kind"> = {
   id: "0b0e7a52-9c1d-4f6e-8a3b-1c2d3e4f5a6b",
   timestamp: 1,
-  level: "error" as const,
+  level: "error",
   identity: { generation: 1, user: null },
   tags: {},
   contexts: {},
