@@ -1,73 +1,56 @@
 import { Flare } from "@priemskiyyy/flare";
 import { afterEach, expect, test, vi } from "vitest";
 
-import { fakeBackend } from "src/fakeBackend.fixture";
+import { fakeRequest } from "src/fakeRequest.fixture";
 import { http } from "src/http";
 
 afterEach(() => {
   vi.useRealTimers();
-  vi.unstubAllGlobals();
 });
 
-const create = (options: Partial<Parameters<typeof http>[0]> = {}) => {
-  const backend = fakeBackend();
-
+const create = (client = fakeRequest(), timeout = 5_000) => {
   const flare = new Flare({
-    destinations: {
-      backend: http({
-        endpoint: backend.endpoint,
-        fetch: backend.fetch,
-        ...options,
-      }),
-    },
+    destinations: { backend: http({ request: client.request }) },
+    timeout,
   });
 
-  return { backend, flare };
+  return { client, flare };
 };
 
-test("creating the adapter sends nothing and does not look for a fetch", () => {
-  const fetch = vi.fn();
+test("creating the adapter sends nothing", () => {
+  const client = fakeRequest();
 
-  vi.stubGlobal("fetch", fetch);
+  http({ request: client.request });
 
-  const backend = fakeBackend();
-
-  http({ endpoint: backend.endpoint });
-  http({ endpoint: backend.endpoint, fetch: backend.fetch });
-
-  expect(fetch).not.toHaveBeenCalled();
-  expect(backend.requests).toEqual([]);
+  expect(client.requests).toEqual([]);
 });
 
-test("a report is posted as JSON with its id as the idempotency key", async () => {
-  const { backend, flare } = create();
+test("each report reaches the request frozen and sanitized, with the signal of its deadline", async () => {
+  const { client, flare } = create();
 
   flare.start();
 
-  const receipt = flare.capture(new Error("upload failed"), {
-    tags: { area: "upload" },
+  const receipt = flare.capture(new Error("charge failed"), {
+    contexts: { card: { token: "sk_live_1", last4: "4242" } },
   });
 
   await receipt.settled;
 
-  expect(backend.requests).toHaveLength(1);
-  expect(backend.requests[0]).toMatchObject({
-    method: "POST",
-    url: backend.endpoint,
-    headers: {
-      "content-type": "application/json",
-      "idempotency-key": receipt.id,
-    },
-    body: {
-      id: receipt.id,
-      kind: "exception",
-      tags: { area: "upload" },
-      exception: { message: "upload failed" },
-    },
+  expect(client.requests).toHaveLength(1);
+
+  const [sent] = client.requests;
+
+  expect(sent?.report).toMatchObject({
+    id: receipt.id,
+    kind: "exception",
+    exception: { message: "charge failed" },
+    contexts: { card: { token: "[Redacted]", last4: "4242" } },
   });
+  expect(Object.isFrozen(sent?.report)).toBe(true);
+  expect(sent?.signal).toBeInstanceOf(AbortSignal);
 });
 
-test("an acknowledged report is submitted with backend evidence and the backend's id", async () => {
+test("a request that resolves with the backend's id is submitted with backend evidence and that id", async () => {
   const { flare } = create();
 
   flare.start();
@@ -85,284 +68,48 @@ test("an acknowledged report is submitted with backend evidence and the backend'
   });
 });
 
-test("an injected response keeps the event id it read once", async () => {
-  const id = vi.fn().mockReturnValueOnce("event-1").mockReturnValue(42);
-
-  const { flare } = create({
-    fetch: async () => ({
-      ok: true,
-      status: 200,
-      json: async () => Object.defineProperty({}, "id", { get: id }),
-    }),
-  });
+test("a request that resolves with nothing is submitted without an event id", async () => {
+  const { client, flare } = create();
 
   flare.start();
+  client.answerNext();
 
-  await expect(flare.message("acknowledged").settled).resolves.toMatchObject({
-    outcomes: { backend: { status: "submitted", event: { id: "event-1" } } },
+  await expect(flare.message("note").settled).resolves.toEqual({
+    state: "settled",
+    outcomes: {
+      backend: {
+        status: "submitted",
+        evidence: "backend-acknowledged",
+        event: null,
+        losses: [],
+      },
+    },
   });
-  expect(id).toHaveBeenCalledTimes(1);
 });
 
-test.each([
-  { label: "no body", body: null },
-  { label: "a body that is not JSON", body: "accepted" },
-  { label: "JSON without an id", body: '{"ok":true}' },
-])(
-  "an acknowledgement with $label is still submitted, without an event id",
-  async (row) => {
-    const { backend, flare } = create();
-
-    flare.start();
-    backend.answerNext(200, row.body);
-
-    await expect(
-      flare.capture(new Error("boom")).settled,
-    ).resolves.toMatchObject({
-      outcomes: { backend: { status: "submitted", event: null } },
-    });
-  },
-);
-
-test("a refusal is a failure that names the status, and it is never retried", async () => {
-  const { backend, flare } = create();
+test("a request that rejects is a failed outcome, and it is never retried", async () => {
+  const { client, flare } = create();
 
   flare.start();
-  backend.answerNext(503);
 
-  const status = await flare.capture(new Error("boom")).settled;
+  const refused = new Error("the backend answered 503");
 
-  expect(status).toMatchObject({ outcomes: { backend: { status: "failed" } } });
-  expect(
-    status.state === "settled" ? status.outcomes.backend : null,
-  ).toMatchObject({
-    error: new Error(
-      `The http reporter could not POST ${backend.endpoint}: the server answered 503.`,
-    ),
-  });
-  expect(backend.requests).toHaveLength(1);
-});
-
-test("an unreachable network is a failure too, and it is never retried", async () => {
-  const offline = new TypeError("fetch failed");
-  const { backend, flare } = create();
-
-  flare.start();
-  backend.failNext(offline);
+  client.failNext(refused);
 
   await expect(flare.capture(new Error("boom")).settled).resolves.toEqual({
     state: "settled",
-    outcomes: { backend: { status: "failed", error: offline } },
+    outcomes: { backend: { status: "failed", error: refused } },
   });
-  expect(backend.requests).toHaveLength(1);
+  expect(client.requests).toHaveLength(1);
 });
 
-test("headers may be a function, awaited for every request so nothing it reads is stale", async () => {
-  let version = 0;
-
-  const { backend, flare } = create({
-    headers: async () => {
-      version += 1;
-
-      return { "x-app-version": `build-${version}` };
-    },
-  });
-
-  flare.start();
-
-  await flare.capture(new Error("one")).settled;
-  await flare.capture(new Error("two")).settled;
-
-  expect(
-    backend.requests.map((request) => request.headers["x-app-version"]),
-  ).toEqual(["build-1", "build-2"]);
-});
-
-test("authorize is asked for the credentials of the account the report belongs to", async () => {
-  const authorize = vi.fn(() => ({ authorization: "Bearer ada-token" }));
-  const { backend, flare } = create({ authorize });
-
-  flare.start();
-  flare.user({ id: "ada" });
-
-  await flare.capture(new Error("boom")).settled;
-
-  expect(authorize).toHaveBeenCalledWith({ user: { id: "ada" } });
-  expect(backend.requests[0]?.headers.authorization).toBe("Bearer ada-token");
-});
-
-test("header precedence is case insensitive, including credentials and protocol headers", async () => {
-  const { backend, flare } = create({
-    headers: {
-      Authorization: "shared",
-      authorization: "another shared value",
-      "Content-Type": "text/plain",
-      "Idempotency-Key": "shared-key",
-    },
-    authorize: () => ({
-      Authorization: "Bearer account-token",
-      "CONTENT-TYPE": "application/xml",
-      "IDEMPOTENCY-KEY": "account-key",
-    }),
-  });
-
-  flare.start();
-
-  const receipt = flare.message("hello");
-
-  await receipt.settled;
-
-  expect(backend.requests[0]?.headers).toEqual({
-    authorization: "Bearer account-token",
-    "content-type": "application/json",
-    "idempotency-key": receipt.id,
-  });
-});
-
-test("an account switch while reading credential headers stops the request", async () => {
-  const { backend, flare } = create({
-    authorize: () => ({
-      get authorization() {
-        flare.user({ id: "grace" });
-
-        return "Bearer grace-token";
-      },
-    }),
-  });
-
-  flare.start();
-  flare.user({ id: "ada" });
-
-  await expect(flare.message("captured as ada").settled).resolves.toMatchObject(
-    {
-      outcomes: {
-        backend: { status: "skipped", reason: "auth-subject-mismatch" },
-      },
-    },
-  );
-  expect(backend.requests).toEqual([]);
-});
-
-test("a report buffered under one account is never sent with the next account's credentials", async () => {
-  const authorize = vi.fn(() => ({ authorization: "Bearer grace-token" }));
-  const { backend, flare } = create({ authorize });
-
-  flare.user({ id: "ada" });
-
-  const receipt = flare.capture(new Error("captured as ada, before start"));
-
-  flare.user({ id: "grace" });
-  flare.start();
-
-  await expect(receipt.settled).resolves.toEqual({
-    state: "settled",
-    outcomes: {
-      backend: { status: "skipped", reason: "auth-subject-mismatch" },
-    },
-  });
-  expect(authorize).not.toHaveBeenCalled();
-  expect(backend.requests).toEqual([]);
-});
-
-test("an account switch while credentials are being fetched stops the request", async () => {
-  let release: (headers: Record<string, string>) => void = () => {};
-
-  const authorize = () =>
-    new Promise<Record<string, string>>((resolve) => {
-      release = resolve;
-    });
-
-  const { backend, flare } = create({ authorize });
-
-  flare.start();
-  flare.user({ id: "ada" });
-
-  const receipt = flare.capture(new Error("captured as ada"));
-
-  flare.user({ id: "grace" });
-  release({ authorization: "Bearer grace-token" });
-
-  await expect(receipt.settled).resolves.toEqual({
-    state: "settled",
-    outcomes: {
-      backend: { status: "skipped", reason: "auth-subject-mismatch" },
-    },
-  });
-  expect(backend.requests).toEqual([]);
-});
-
-test("disposal while headers are pending prevents authorization and sending", async () => {
-  let release = () => {};
-
-  const headers = new Promise<Record<string, string>>((resolve) => {
-    release = () => resolve({ "x-build": "1" });
-  });
-
-  const authorize = vi.fn(() => ({}));
-  const { backend, flare } = create({ headers: () => headers, authorize });
-
-  flare.start();
-
-  const receipt = flare.message("pending headers");
-
-  flare.dispose();
-  release();
-  await receipt.settled;
-
-  expect(authorize).not.toHaveBeenCalled();
-  expect(backend.requests).toEqual([]);
-});
-
-test("disposal while credentials are pending prevents sending", async () => {
-  let release = () => {};
-
-  const credentials = new Promise<Record<string, string>>((resolve) => {
-    release = () => resolve({ authorization: "test" });
-  });
-
-  const { backend, flare } = create({ authorize: () => credentials });
-
-  flare.start();
-
-  const receipt = flare.message("pending credentials");
-
-  flare.dispose();
-  release();
-  await receipt.settled;
-
-  expect(backend.requests).toEqual([]);
-});
-
-test("without authorize there are no credentials to cross, so a buffered report is still sent under its own identity", async () => {
-  const { backend, flare } = create();
-
-  flare.user({ id: "ada" });
-
-  const receipt = flare.capture(new Error("captured as ada, before start"));
-
-  flare.user({ id: "grace" });
-  flare.start();
-  await receipt.settled;
-
-  expect(backend.requests[0]?.body).toMatchObject({
-    identity: { user: { id: "ada" } },
-  });
-});
-
-test("the deadline aborts the request and leaves the outcome indeterminate", async () => {
+test("the deadline aborts the request's signal and leaves the outcome indeterminate", async () => {
   vi.useFakeTimers();
 
-  const backend = fakeBackend();
-
-  const flare = new Flare({
-    destinations: {
-      backend: http({ endpoint: backend.endpoint, fetch: backend.fetch }),
-    },
-    deadlineMs: 1_000,
-  });
+  const { client, flare } = create(fakeRequest(), 1_000);
 
   flare.start();
-  backend.hangNext();
+  client.hangNext();
 
   const receipt = flare.capture(new Error("slow backend"));
 
@@ -370,50 +117,56 @@ test("the deadline aborts the request and leaves the outcome indeterminate", asy
 
   await expect(receipt.settled).resolves.toEqual({
     state: "settled",
-    outcomes: { backend: { status: "indeterminate", reason: "deadline" } },
+    outcomes: { backend: { status: "indeterminate", reason: "timeout" } },
   });
-  expect(backend.requests[0]?.signal.aborted).toBe(true);
+  expect(client.requests[0]?.signal.aborted).toBe(true);
 });
 
-test("where there is no fetch the destination is unavailable, and an injected one makes it available", () => {
-  vi.stubGlobal("fetch", undefined);
+test("a report whose user signed out since it was captured is never sent, because the client authenticates as the next account", async () => {
+  const { client, flare } = create();
 
-  const backend = fakeBackend();
+  flare.user({ id: "ada" });
 
-  expect(http({ endpoint: backend.endpoint }).available()).toEqual({
-    available: false,
-    reason:
-      "No fetch is available. Pass one through the http reporter's fetch option.",
-  });
-  expect(
-    http({ endpoint: backend.endpoint, fetch: backend.fetch }).available(),
-  ).toEqual({
-    available: true,
-  });
-});
+  const receipt = flare.capture(new Error("captured as ada, before start"));
 
-test("a fetch installed after the adapter was created is honoured", async () => {
-  vi.stubGlobal("fetch", undefined);
-
-  const backend = fakeBackend();
-
-  const flare = new Flare({
-    destinations: { backend: http({ endpoint: backend.endpoint }) },
-  });
-
-  vi.stubGlobal("fetch", backend.fetch);
+  flare.user({ id: "grace" });
   flare.start();
-  await flare.capture(new Error("boom")).settled;
 
-  expect(backend.requests).toHaveLength(1);
+  await expect(receipt.settled).resolves.toEqual({
+    state: "settled",
+    outcomes: {
+      backend: { status: "skipped", reason: "auth-subject-mismatch" },
+    },
+  });
+  expect(client.requests).toEqual([]);
 });
 
-test("the native handle names the endpoint", () => {
-  const { backend, flare } = create();
+test("an anonymous report buffered before a sign-in is sent, and so is one for the account still signed in", async () => {
+  const { client, flare } = create();
+  const anonymous = flare.capture(new Error("during boot"));
+
+  flare.user({ id: "ada" });
+
+  const signedIn = flare.capture(new Error("as ada, before start"));
 
   flare.start();
 
-  expect(flare.destination("backend").native).toEqual({
-    endpoint: backend.endpoint,
+  await expect(anonymous.settled).resolves.toMatchObject({
+    outcomes: { backend: { status: "submitted" } },
   });
+  await expect(signedIn.settled).resolves.toMatchObject({
+    outcomes: { backend: { status: "submitted" } },
+  });
+  expect(client.requests.map((sent) => sent.report.id)).toEqual([
+    anonymous.id,
+    signedIn.id,
+  ]);
+});
+
+test("the native handle is the request the application passed", () => {
+  const { client, flare } = create();
+
+  flare.start();
+
+  expect(flare.destination("backend").native).toBe(client.request);
 });
