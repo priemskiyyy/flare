@@ -48,7 +48,11 @@ test("a hook used outside a provider fails with a message that names the provide
   vi.spyOn(console, "error").mockImplementation(() => {});
 
   expect(() => renderHook(() => useFlare())).toThrow(
-    "Flare hooks must be used within a FlareProvider.",
+    expect.objectContaining({
+      name: "FlareError",
+      code: "INVALID_CONFIGURATION",
+      message: "Flare hooks must be used within a FlareProvider.",
+    }),
   );
 });
 
@@ -75,7 +79,7 @@ test("observing is passive: mounting the provider and every status hook opens no
     { wrapper },
   );
 
-  expect(mock.openings).toEqual([]);
+  expect(mock.sessions).toEqual([]);
   expect(mock.submissions).toEqual([]);
   expect(flare.status.get()).toEqual({ state: "idle" });
 });
@@ -109,23 +113,16 @@ test("useFlareStatus follows the runtime and rerenders once per change", () => {
   expect(result.current).toEqual({ state: "disposed" });
 });
 
-test("useDestinationStatus follows one destination from starting to ready, and to failed", async () => {
-  const slow = create({ holdOpen: true });
+test("useDestinationStatus follows one destination from idle to ready, and to failed", () => {
+  const { flare, wrapper } = create();
 
   const { result } = renderHook(() => useDestinationStatus("primary"), {
-    wrapper: slow.wrapper,
+    wrapper,
   });
 
   expect(result.current).toEqual({ state: "idle" });
 
-  act(() => slow.flare.start());
-
-  expect(result.current).toEqual({ state: "starting" });
-
-  await act(async () => {
-    slow.mock.openings[0]?.settle();
-    await Promise.resolve();
-  });
+  act(() => flare.start());
 
   expect(result.current).toEqual({ state: "ready" });
 
@@ -179,8 +176,8 @@ test("unmounting the provider never starts, stops or disposes anything", () => {
 
   expect(flare.status.get()).toEqual({ state: "started" });
   expect(flare.destination("primary").status.get()).toEqual({ state: "ready" });
+  expect(mock.sessions).toHaveLength(1);
   expect(mock.sessions[0]?.disposeCount).toBe(0);
-  expect(mock.openings).toHaveLength(1);
 });
 
 test("hooks stop observing after unmount", () => {
@@ -246,6 +243,6 @@ test("Strict Mode and a remount leave no listener behind, open nothing and repor
 
   expect(flareStatus.count).toBe(0);
   expect(destinationStatus.count).toBe(0);
-  expect(mock.openings).toEqual([]);
+  expect(mock.sessions).toEqual([]);
   expect(mock.submissions).toEqual([]);
 });

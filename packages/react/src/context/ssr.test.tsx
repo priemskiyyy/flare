@@ -36,7 +36,7 @@ test("SSR is inert and hydrates from the same snapshots without a mismatch", asy
 
   expect(html).toContain("idle/idle");
   expect(subscribe).not.toHaveBeenCalled();
-  expect(mock.openings).toEqual([]);
+  expect(mock.sessions).toEqual([]);
   expect(mock.submissions).toEqual([]);
 
   // The client has already started Flare by the time it hydrates. The first

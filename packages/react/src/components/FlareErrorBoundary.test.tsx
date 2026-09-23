@@ -21,7 +21,7 @@ const create = () => {
   const flare = new Flare({
     destinations: { primary: mock.adapter },
     // Object identity dedupe would hide a boundary that captured twice.
-    dedupe: { windowMs: 0 },
+    dedupe: { window: 0 },
   });
 
   flare.start();
@@ -211,5 +211,11 @@ test("a boundary outside a provider fails with a message that names the provider
         <p>child</p>
       </FlareErrorBoundary>,
     ),
-  ).toThrow("FlareErrorBoundary must be used within a FlareProvider.");
+  ).toThrow(
+    expect.objectContaining({
+      name: "FlareError",
+      code: "INVALID_CONFIGURATION",
+      message: "FlareErrorBoundary must be used within a FlareProvider.",
+    }),
+  );
 });
