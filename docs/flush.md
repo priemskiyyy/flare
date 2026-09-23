@@ -12,37 +12,38 @@ description: "Give Flare and the provider SDKs a bounded moment to hand off repo
 flare.start();
 ```
 
-Calling `start()` again is safe. It retries only the destinations whose start failed, which makes it a reasonable thing to call when the device comes back online.
+Calling `start()` again is safe. It retries only the destinations whose start failed. A start fails because the provider SDK was not initialized or lacks what the adapter needs, never because of the network, so call it again once the SDK is set up.
 
 ## flush
 
 `flush()` waits for the work that was accepted before the call, then asks each provider SDK to flush what it holds.
 
 ```ts
-const result = await flare.flush({ timeoutMs: 1500 });
+const result = await flare.flush({ timeout: 1500 });
 
 result.drained; // true when everything accepted before the call has an outcome
 result.destinations.sentry; // { status: "flushed" }
 ```
 
-The timeout, two seconds by default, bounds the wait and nothing else. It cancels nothing, and it proves nothing about delivery. Reports captured after the call do not extend the wait.
+The timeout, two seconds by default, bounds the wait and nothing else. It cancels nothing, and it proves nothing about delivery. Reports captured after the call do not extend the wait. A provider's own flush gets what is left of the timeout, not all of it again. `flush` never throws: a timeout outside 0 to 2147483647 ms is clamped into that range. Unlike Flare's other timers, a pending flush keeps a Node process alive, because its caller is waiting for it.
 
-| Status        | Meaning                                                            |
-| ------------- | ------------------------------------------------------------------ |
-| `flushed`     | The provider's own flush completed.                                |
-| `timeout`     | Time ran out first.                                                |
-| `failed`      | The provider's flush threw, and `error` holds why.                 |
-| `unsupported` | The provider has no flush. Flare's own work for it did drain.      |
-| `not-ready`   | The destination never became ready, so there was nothing to flush. |
+| Status        | Meaning                                                                                                    |
+| ------------- | ---------------------------------------------------------------------------------------------------------- |
+| `flushed`     | The provider's own flush completed.                                                                        |
+| `timeout`     | Time ran out first.                                                                                        |
+| `failed`      | The provider's flush threw or rejected, or answered with no status its contract allows (`INVALID_ANSWER`). |
+| `unsupported` | The provider has no flush. Flare's own work for it did drain.                                              |
+| `not-ready`   | The destination never became ready, so there was nothing to flush.                                         |
 
-What `flushed` means depends on the provider, and the destination's `capabilities.flush` says which:
+What `flushed` means depends on the provider:
 
-| Capability             | A completed flush means                                                                      | Who                                 |
-| ---------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `sdk-queue`            | The SDK emptied its in-memory queue onto the network.                                        | Sentry in the browser               |
-| `native-handoff`       | The events were handed to the native SDK, which persists and sends them on its own schedule. | Sentry in React Native              |
-| `backend-acknowledged` | A server acknowledged them.                                                                  | no built-in adapter                 |
-| `none`                 | There is no flush.                                                                           | Bugsnag, Crashlytics, HTTP, console |
+| Provider                        | A completed flush means                                                                      |
+| ------------------------------- | -------------------------------------------------------------------------------------------- |
+| Sentry in the browser           | The SDK emptied its in-memory queue onto the network.                                        |
+| Sentry in React Native          | The events were handed to the native SDK, which persists and sends them on its own schedule. |
+| PostHog on React Native         | The client sent its queue and PostHog answered for it.                                       |
+| OpenTelemetry with `forceFlush` | The provider's processors exported what they held.                                           |
+| every other adapter             | Nothing: there is no provider flush, and the result is `unsupported`.                        |
 
 ## When to flush
 
@@ -51,7 +52,7 @@ In a browser, flush when the page is being hidden. It is the last event a mobile
 ```ts
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
-    flare.flush({ timeoutMs: 1000 });
+    flare.flush({ timeout: 1000 });
   }
 });
 ```
@@ -60,7 +61,7 @@ On a server or in a script, flush before the process exits:
 
 ```ts
 const shutdown = async () => {
-  await flare.flush({ timeoutMs: 2000 });
+  await flare.flush({ timeout: 2000 });
   flare.dispose();
 };
 ```
@@ -80,6 +81,6 @@ After it:
 - reports still waiting in a buffer settle as `dropped` with the reason `disposed`
 - reports in flight settle as `indeterminate` with the reason `disposed`, because they may already have left
 - new captures are dropped with the reason `disposed`
-- adapters clear the ambient state they wrote to a provider SDK, and an owned SDK that can be closed is closed
+- adapters clear the user, tags and contexts their ambient mirror wrote to a provider SDK, and leave the SDK itself running. Mirrored breadcrumbs and Crashlytics log lines stay: Sentry keeps them in the list its own breadcrumbs share, and Bugsnag and Crashlytics cannot remove one.
 
 A disposed Flare cannot be started again. Create a new one. In an application that lives as long as the page, you never need to dispose. It matters in tests, in hot module replacement and in server code that creates a Flare per unit of work.
