@@ -1,3 +1,5 @@
+import { isSensitiveKey } from "@priemskiyyy/flare";
+
 /** Reads descriptors to avoid invoking getters or toJSON while inspecting diagnostics. */
 export const inspectContext = (context: unknown) => {
   const seen = new WeakSet<object>();
@@ -45,7 +47,7 @@ export const inspectContext = (context: unknown) => {
         break;
       }
 
-      if (/token|authorization|password|secret|cookie|api[-_]?key/i.test(key)) {
+      if (isSensitiveKey(key)) {
         result[key] = "[Redacted]";
         continue;
       }
@@ -63,9 +65,9 @@ export const inspectContext = (context: unknown) => {
     }
 
     if (Array.isArray(value)) {
-      return Object.entries(result).flatMap(([key, item]) =>
-        key === "length" ? [] : [item],
-      );
+      return Object.entries(result)
+        .filter(([key]) => key !== "length")
+        .map(([, item]) => item);
     }
 
     return result;
