@@ -1,8 +1,13 @@
 import type { SanitizedReport } from "@priemskiyyy/flare";
 
 import type { SentryEventLike } from "src/types/SentryEventLike";
-import { toSentryBreadcrumb } from "src/utils/toSentryBreadcrumb";
-import { toSentryUser } from "src/utils/toSentryUser";
+import {
+  AGGREGATED_CONTEXT,
+  BREADCRUMB_CATEGORY,
+  REPORT_ID_TAG,
+} from "src/utils/constants/event";
+import { getSentryBreadcrumb } from "src/utils/getSentryBreadcrumb";
+import { getSentryUser } from "src/utils/getSentryUser";
 
 /**
  * Applies the snapshot after Sentry combines its scopes. Setting fields on
@@ -27,8 +32,7 @@ export const applyReportToEvent = (
   const reportContexts = { ...contexts, ...report.contexts };
 
   if (report.kind === "exception" && report.exception.aggregated.length > 0) {
-    // Sentry has no field for the errors of an AggregateError.
-    reportContexts["flare.aggregated"] = {
+    reportContexts[AGGREGATED_CONTEXT] = {
       errors: report.exception.aggregated.map(({ name, message }) => ({
         name,
         message,
@@ -39,17 +43,24 @@ export const applyReportToEvent = (
   // Mirrored breadcrumbs describe submission time. Rebuild Flare's part
   // from capture time, including reports buffered before the mirror opened.
   const breadcrumbs = [
-    ...(event.breadcrumbs ?? []).filter((entry) => entry.category !== "flare"),
-    ...report.breadcrumbs.map(toSentryBreadcrumb),
+    ...(event.breadcrumbs ?? []).filter(
+      (entry) => entry.category !== BREADCRUMB_CATEGORY,
+    ),
+    ...report.breadcrumbs.map(getSentryBreadcrumb),
   ].sort((first, second) => (first.timestamp ?? 0) - (second.timestamp ?? 0));
 
-  return {
+  const mapped: SentryEventLike = {
     ...event,
-    user: toSentryUser(report.identity.user) ?? {},
+    user: getSentryUser(report.identity.user) ?? {},
     level: report.level,
-    tags: { ...tags, ...report.tags, "flare.report_id": report.id },
+    tags: { ...tags, ...report.tags, [REPORT_ID_TAG]: report.id },
     contexts: reportContexts,
     breadcrumbs,
-    ...(report.operation === null ? {} : { transaction: report.operation }),
   };
+
+  if (report.operation !== null) {
+    mapped.transaction = report.operation;
+  }
+
+  return mapped;
 };
