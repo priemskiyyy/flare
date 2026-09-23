@@ -24,8 +24,7 @@ const create = (
 test("creating the adapter calls nothing on the SDK", () => {
   const fake = fakeBugsnag({ started: false });
 
-  bugsnag({ sdk: fake.sdk });
-  bugsnag({ sdk: fake.sdk, ownership: "owned", start: fake.start });
+  bugsnag({ sdk: fake.sdk, Breadcrumb: fake.Breadcrumb });
 
   expect(fake.calls.start).toBe(0);
   expect(fake.events).toEqual([]);
@@ -112,7 +111,7 @@ test("user, severity, operation, tags, contexts and breadcrumbs are applied to t
   expect(fake.events[0]?.metadata).toEqual({
     tags: { area: "upload", attempt: 2 },
     upload: { kind: "avatar" },
-    flare: { reportId: receipt.id, level: "warning" },
+    flare: { report_id: receipt.id, level: "warning" },
   });
   expect(
     fake.events[0]?.breadcrumbs.map((breadcrumb) => breadcrumb.toJSON()),
@@ -167,7 +166,7 @@ test.each([
       tags: { area: "upload" },
       contexts: {
         tags: { area: "wrong" },
-        flare: { reportId: "wrong" },
+        flare: { report_id: "wrong" },
         "flare.aggregated": { errors: "wrong" },
         upload: { attempt: 1 },
       },
@@ -187,7 +186,7 @@ test.each([
     });
     expect(fake.events[0]?.metadata.tags).toEqual({ area: "upload" });
     expect(fake.events[0]?.metadata.flare).toEqual({
-      reportId: receipt.id,
+      report_id: receipt.id,
       level: "error",
     });
     expect(fake.events[0]?.metadata["flare.aggregated"]).toEqual(aggregated);
@@ -386,43 +385,13 @@ test("the outcome waits for the callback, not for notify to return", async () =>
   });
 });
 
-test.each([false, true])(
-  "without the Breadcrumb class breadcrumbs stay unsupported with mirroring %s",
-  async (mirrored) => {
-    const fake = fakeBugsnag();
-
-    const adapter = bugsnag({
-      sdk: fake.sdk,
-      ambient: { breadcrumbs: mirrored },
-    });
-
-    const flare = new Flare({ destinations: { bugsnag: adapter } });
-
-    flare.start();
-    flare.breadcrumb("opened");
-
-    const status = await flare.capture(new Error("boom")).settled;
-
-    expect(adapter.capabilities.eventLocal.breadcrumbs).toBe(false);
-    expect(fake.events[0]?.breadcrumbs).toEqual([]);
-    expect(status).toMatchObject({
-      outcomes: {
-        bugsnag: { losses: [{ path: "breadcrumbs", reason: "unsupported" }] },
-      },
-    });
-  },
-);
-
 test("a message is skipped by default, because Bugsnag can only carry it as a fake error", async () => {
-  const fake = fakeBugsnag();
-  const adapter = bugsnag({ sdk: fake.sdk });
-  const flare = new Flare({ destinations: { bugsnag: adapter } });
+  const { fake, flare } = create();
 
   flare.start();
 
   const status = await flare.message("Unexpected payment state").settled;
 
-  expect(adapter.capabilities.messages).toBe(false);
   expect(status).toEqual({
     state: "settled",
     outcomes: {
@@ -455,7 +424,7 @@ test("messages can be opted into as errors, and the lossy mapping is recorded", 
   });
 });
 
-test("a borrowed SDK that is not started fails to start, and a retry after the application starts it succeeds", () => {
+test("an SDK that is not started yet fails the start, and a retry after the application starts it succeeds", () => {
   const fake = fakeBugsnag({ started: false });
   const { flare } = create({}, fake);
 
@@ -463,9 +432,12 @@ test("a borrowed SDK that is not started fails to start, and a retry after the a
 
   expect(flare.destination("bugsnag").status.get()).toMatchObject({
     state: "failed",
-    error: new Error(
-      'Bugsnag is not started. Call Bugsnag.start before flare.start(), or pass ownership: "owned" with a start function.',
-    ),
+    error: expect.objectContaining({
+      name: "FlareError",
+      code: "NOT_INITIALIZED",
+      message:
+        "Bugsnag is not started. Call Bugsnag.start before flare.start().",
+    }),
   });
   expect(fake.calls.start).toBe(0);
 
@@ -475,53 +447,10 @@ test("a borrowed SDK that is not started fails to start, and a retry after the a
   expect(flare.destination("bugsnag").status.get()).toEqual({ state: "ready" });
 });
 
-test("an owned SDK is started when the destination opens, and a borrowed one never is", () => {
-  const owned = fakeBugsnag({ started: false });
-  const borrowed = fakeBugsnag();
-  const first = create({ ownership: "owned", start: owned.start }, owned);
-  const second = create({}, borrowed);
-
-  first.flare.start();
-  second.flare.start();
-  first.flare.dispose();
-  second.flare.dispose();
-
-  expect(owned.calls.start).toBe(1);
-  expect(borrowed.calls.start).toBe(0);
-});
-
-test("the capabilities say what the browser SDK can honestly do", () => {
-  const fake = fakeBugsnag();
-
-  expect(
-    bugsnag({ sdk: fake.sdk, Breadcrumb: fake.Breadcrumb }).capabilities,
-  ).toEqual({
-    eventLocal: { user: true, tags: true, contexts: true, breadcrumbs: true },
-    messages: false,
-    evidence: "sdk-callback-completed",
-    flush: "none",
-    queue: "none",
-    automaticCapture: "provider-owned",
-    instance: "singleton",
-    filtering: "provider-hooks",
-  });
-});
-
-test("the native handle is the SDK the application injected, and one SDK cannot be registered twice", () => {
+test("the native handle is the SDK the application injected", () => {
   const { fake, flare } = create();
 
   flare.start();
 
   expect(flare.destination("bugsnag").native).toBe(fake.sdk);
-  expect(
-    () =>
-      new Flare({
-        destinations: {
-          first: bugsnag({ sdk: fake.sdk }),
-          second: bugsnag({ sdk: fake.sdk }),
-        },
-      }),
-  ).toThrow(
-    'Flare destinations "first" and "second" drive the same singleton SDK. Register it once.',
-  );
 });

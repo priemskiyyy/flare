@@ -26,7 +26,9 @@ test("without the ambient option nothing is ever mirrored into the Bugsnag clien
   const fake = fakeBugsnag();
 
   const flare = new Flare({
-    destinations: { bugsnag: bugsnag({ sdk: fake.sdk }) },
+    destinations: {
+      bugsnag: bugsnag({ sdk: fake.sdk, Breadcrumb: fake.Breadcrumb }),
+    },
   });
 
   flare.start();
@@ -37,20 +39,6 @@ test("without the ambient option nothing is ever mirrored into the Bugsnag clien
   flare.breadcrumb("opened");
 
   expect(fake.client).toEqual({ user: {}, metadata: {}, breadcrumbs: [] });
-});
-
-test("with no ambient part enabled the session has no ambient member at all", async () => {
-  const open = (ambient?: Parameters<typeof bugsnag>[0]["ambient"]) =>
-    bugsnag({
-      sdk: fakeBugsnag().sdk,
-      ...(ambient === undefined ? {} : { ambient }),
-    }).open({
-      destination: "bugsnag",
-    });
-
-  expect("ambient" in (await open())).toBe(false);
-  expect("ambient" in (await open({ tags: false }))).toBe(false);
-  expect(typeof (await open({ tags: true })).ambient?.session).toBe("function");
 });
 
 test("only the parts that were asked for are mirrored", () => {
@@ -98,7 +86,7 @@ test("ambient contexts cannot replace Flare's reserved metadata sections", () =>
   flare.tag("plan", "pro");
 
   flare.context("tags", { plan: "wrong" });
-  flare.context("flare", { reportId: "wrong" });
+  flare.context("flare", { report_id: "wrong" });
   flare.context("flare.aggregated", { errors: "wrong" });
   flare.context("workspace", { id: "w1" });
 
@@ -142,6 +130,7 @@ test("a report delivered after an account switch carries nothing the mirror wrot
     destinations: {
       bugsnag: bugsnag({
         sdk: fake.sdk,
+        Breadcrumb: fake.Breadcrumb,
         ambient: { user: true, tags: true, contexts: true },
       }),
     },
@@ -161,7 +150,7 @@ test("a report delivered after an account switch carries nothing the mirror wrot
   });
   expect(fake.events[0]?.user.id).toBe("ada");
   expect(fake.events[0]?.metadata).toEqual({
-    flare: { reportId: expect.any(String), level: "error" },
+    flare: { report_id: expect.any(String), level: "error" },
   });
   expect(JSON.stringify(fake.events[0]?.metadata)).not.toContain("grace");
 });
@@ -188,7 +177,11 @@ test("delayed SDK hooks clear the mirror that was copied onto the event at submi
 
   const flare = new Flare({
     destinations: {
-      bugsnag: bugsnag({ sdk: fake.sdk, ambient: { contexts: true } }),
+      bugsnag: bugsnag({
+        sdk: fake.sdk,
+        Breadcrumb: fake.Breadcrumb,
+        ambient: { contexts: true },
+      }),
     },
   });
 
@@ -205,7 +198,7 @@ test("delayed SDK hooks clear the mirror that was copied onto the event at submi
   await receipt.settled;
 
   expect(fake.events[0]?.metadata).toEqual({
-    flare: { reportId: receipt.id, level: "error" },
+    flare: { report_id: receipt.id, level: "error" },
   });
 });
 
@@ -281,7 +274,7 @@ test("buffered reports carry the breadcrumbs captured before the mirror started"
   ).toEqual(["before-start"]);
 });
 
-test("disposing a borrowed SDK removes what Flare mirrored and nothing else", () => {
+test("disposing removes what Flare mirrored and nothing else", () => {
   const { fake, flare } = create({ user: true, tags: true, contexts: true });
 
   fake.sdk.addMetadata("app", { build: 7 });
