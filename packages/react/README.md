@@ -1,6 +1,6 @@
 # @priemskiyyy/flare-react
 
-React bindings for [Flare](../core): a provider, two status hooks and an error boundary. They are deliberately thin. Reports are made with `flare.capture`, which needs no hook, and the bindings never start, stop or dispose anything.
+React bindings for [Flare](../core): a provider, `useFlare`, two status hooks and an error boundary. They are deliberately thin. Reports are made with `flare.capture`, and the bindings never start, stop or dispose anything.
 
 Works in React 19.2 or newer, in the browser and in React Native.
 
@@ -16,11 +16,11 @@ Create and start the Flare outside React, as early as your application allows, t
 
 ```tsx
 import { Flare } from "@priemskiyyy/flare";
-import { consoleReporter } from "@priemskiyyy/flare-console";
+import { console } from "@priemskiyyy/flare-console";
 import { FlareErrorBoundary, FlareProvider } from "@priemskiyyy/flare-react";
 
 export const flare = new Flare({
-  destinations: { console: consoleReporter() },
+  destinations: { console: console() },
 });
 
 flare.start();
@@ -37,6 +37,8 @@ export const Root = () => (
 ## Type it once
 
 Register your Flare, and every hook and the boundary know its destination names and its schema:
+
+<!-- snippet: fragment -->
 
 ```ts
 declare module "@priemskiyyy/flare-react" {
@@ -68,7 +70,7 @@ const flare = useFlare();
 const handleSavePress = () => save().catch(flare.capture);
 ```
 
-Returns the nearest provider's Flare, and throws `Flare hooks must be used within a FlareProvider.` when there is none. `capture`, `message` and the other methods stay bound, so they can be passed around.
+Returns the nearest provider's Flare, and throws a `FlareError` with the code `INVALID_CONFIGURATION`, `Flare hooks must be used within a FlareProvider.`, when there is none. `capture`, `message` and the other methods stay bound, so they can be passed around.
 
 ## useFlareStatus
 
@@ -85,11 +87,12 @@ import { useDestinationStatus } from "@priemskiyyy/flare-react";
 
 const sentry = useDestinationStatus("sentry");
 
-if (sentry.state === "failed")
+if (sentry.state === "failed") {
   console.warn("Sentry did not start", sentry.error);
+}
 ```
 
-One destination's status: `idle`, `starting`, `ready`, `unavailable`, `failed` or `disposed`. `ready` means locally usable, not that a network is reachable.
+One destination's status: `idle`, `ready`, `failed` or `disposed`. `ready` means locally usable, not that a network is reachable.
 
 Both status hooks observe only. Rendering them starts nothing, opens no destination and creates no report. Both accept an optional callback that is told about later changes; it always sees the latest callback, and it gets a listener of its own so a callback that throws cannot disturb what React renders. On the server and during the hydrating render both read `idle`, so server and client markup match even when the client has already started Flare.
 
