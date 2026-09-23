@@ -16,10 +16,10 @@ Create one Flare for the application, start it, and report an error:
 
 ```ts
 import { Flare } from "@priemskiyyy/flare";
-import { consoleReporter } from "@priemskiyyy/flare-console";
+import { console } from "@priemskiyyy/flare-console";
 
 export const flare = new Flare({
-  destinations: { console: consoleReporter() },
+  destinations: { console: console() },
 });
 
 flare.start();
@@ -44,11 +44,11 @@ The user, the tag, the context and the breadcrumb describe the session, so every
 
 ## Send it to a provider
 
-Add a destination and choose where reports go by default. This example keeps the console for development and adds Sentry:
+Add a destination and choose where reports go with `defaults.to`. This example keeps the console for development and sends reports to Sentry:
 
 ```ts
 import { Flare } from "@priemskiyyy/flare";
-import { consoleReporter } from "@priemskiyyy/flare-console";
+import { console } from "@priemskiyyy/flare-console";
 import { sentry } from "@priemskiyyy/flare-sentry";
 import * as Sentry from "@sentry/browser";
 
@@ -57,9 +57,9 @@ Sentry.init({ dsn });
 export const flare = new Flare({
   destinations: {
     sentry: sentry({ sdk: Sentry }),
-    console: consoleReporter(),
+    console: console(),
   },
-  default: ["sentry"],
+  defaults: { to: ["sentry"] },
 });
 
 flare.start();
