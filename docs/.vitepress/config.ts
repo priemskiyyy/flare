@@ -1,5 +1,6 @@
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitepress";
 
 const siteUrl = process.env.DOCS_SITE_URL;
@@ -71,6 +72,11 @@ export default defineConfig({
     ["meta", { name: "theme-color", content: "#b45309" }],
   ],
   ...(siteUrl ? { sitemap: { hostname: siteUrl } } : {}),
+  vite: {
+    resolve: {
+      alias: { src: fileURLToPath(new URL(".", import.meta.url)) },
+    },
+  },
   buildEnd: async ({ outDir, srcDir }) => {
     const sitemap = siteUrl
       ? `Sitemap: ${new URL("sitemap.xml", `${siteUrl.replace(/\/$/, "")}/`).href}\n`
