@@ -18,14 +18,35 @@ test("flush reports the core drain and how far each destination's own flush got"
   flare.start();
   flare.capture(new Error("boom"));
 
-  await expect(flare.flush({ timeoutMs: 500 })).resolves.toEqual({
+  await expect(flare.flush({ timeout: 500 })).resolves.toEqual({
     drained: true,
     destinations: {
       flushing: { status: "flushed" },
       bare: { status: "unsupported" },
     },
   });
-  expect(flushing.sessions[0]?.flushes[0]?.context.timeoutMs).toBe(500);
+  expect(flushing.sessions[0]?.flushes[0]?.context.timeout).toBeLessThanOrEqual(
+    500,
+  );
+});
+
+test("a provider's flush gets what is left of the deadline once the core has drained", async () => {
+  vi.useFakeTimers();
+
+  const mock = createMockAdapter({ hold: true, flush: true });
+  const flare = new Flare({ destinations: { primary: mock.adapter } });
+
+  flare.start();
+  flare.capture(new Error("in flight"));
+
+  const flushing = flare.flush({ timeout: 1_000 });
+
+  await vi.advanceTimersByTimeAsync(200);
+  mock.submissions[0]?.settle();
+  await flushing;
+
+  expect(mock.sessions[0]?.flushes[0]?.context.timeout).toBe(800);
+  vi.useRealTimers();
 });
 
 test("flush is a barrier: captures made after the call do not extend it", async () => {
@@ -35,7 +56,7 @@ test("flush is a barrier: captures made after the call do not extend it", async 
   flare.start();
   flare.capture(new Error("before"));
 
-  const flushed = flare.flush({ timeoutMs: 1_000 });
+  const flushed = flare.flush({ timeout: 1_000 });
 
   flare.capture(new Error("after"));
   mock.submissions[0]?.settle();
@@ -57,7 +78,7 @@ test("a flush that times out says so, and neither cancels nor disproves the subm
 
   const receipt = flare.capture(new Error("slow"));
 
-  const flushed = flare.flush({ timeoutMs: 200 });
+  const flushed = flare.flush({ timeout: 200 });
 
   await vi.advanceTimersByTimeAsync(200);
 
@@ -105,7 +126,6 @@ test("a provider whose flush throws is a failed boundary, not a rejected promise
           flush: () => {
             throw failure;
           },
-          dispose: () => {},
         }),
       },
     },
