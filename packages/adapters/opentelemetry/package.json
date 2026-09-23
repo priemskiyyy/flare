@@ -1,0 +1,61 @@
+{
+  "name": "@priemskiyyy/flare-opentelemetry",
+  "version": "0.1.0",
+  "description": "OpenTelemetry Logs destination for flare: each report is one log record with its own user, severity, exception and attributes, through the Logger you inject, to any OTLP backend.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/priemskiyyy/flare.git",
+    "directory": "packages/adapters/opentelemetry"
+  },
+  "bugs": {
+    "url": "https://github.com/priemskiyyy/flare/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "lint:typescript": "tsc --noEmit -p .",
+    "lint:eslint": "eslint src",
+    "test:unit": "vitest run --root ../../.. --project opentelemetry"
+  },
+  "peerDependencies": {
+    "@priemskiyyy/flare": ">=0.1.0 <0.2",
+    "@opentelemetry/api-logs": ">=0.200.0 <1"
+  },
+  "devDependencies": {
+    "@priemskiyyy/flare": "workspace:*"
+  },
+  "keywords": [
+    "opentelemetry",
+    "otel",
+    "otlp",
+    "logs",
+    "error-reporting",
+    "typescript",
+    "flare",
+    "adapter"
+  ],
+  "homepage": "https://priemskiyyy.github.io/flare/",
+  "peerDependenciesMeta": {
+    "@opentelemetry/api-logs": {
+      "optional": true
+    }
+  }
+}
