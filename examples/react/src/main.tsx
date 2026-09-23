@@ -1,38 +1,20 @@
-import { FlareDevtools } from "@priemskiyyy/flare-devtools/react";
-import { FlareProvider } from "@priemskiyyy/flare-react";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { Application } from "src/Application";
-import { createExampleBackend } from "src/backend/createExampleBackend";
-import { createExampleFlare } from "src/reporting/createExampleFlare";
+import { startLedger } from "src/utils/startLedger";
 import "src/styles.css";
 
-const backend = createExampleBackend();
-const flare = createExampleFlare({ fetch: backend.fetch });
+const root = document.getElementById("root");
 
-flare.start();
-
-const container = document.getElementById("root");
-
-if (container === null) {
+if (root === null) {
   throw new Error("The page has no #root element.");
 }
 
-const root = createRoot(container);
+const { backend, providers, runtime } = startLedger({ latency: 400 });
 
-root.render(
+createRoot(root).render(
   <StrictMode>
-    <FlareProvider flare={flare}>
-      <Application backend={backend} />
-      <FlareDevtools />
-    </FlareProvider>
+    <Application backend={backend} providers={providers} runtime={runtime} />
   </StrictMode>,
 );
-
-if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    root.unmount();
-    flare.dispose();
-  });
-}
