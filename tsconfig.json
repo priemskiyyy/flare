@@ -18,6 +18,11 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["vitest.config.ts", "docs/.vitepress/config.ts"],
+  "include": [
+    "vitest.config.ts",
+    "docs/.vitepress/config.ts",
+    "examples/playwright.config.ts",
+    "examples/ledger.spec.ts"
+  ],
   "exclude": ["**/node_modules", "**/dist", ".artifacts"]
 }
