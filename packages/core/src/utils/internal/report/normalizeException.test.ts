@@ -12,7 +12,7 @@ const normalize = (
   scrub: PrivacyPolicy["scrub"] = null,
 ) =>
   normalizeException(thrown, {
-    redact: [],
+    redact: () => false,
     scrub,
     limits: { ...DEFAULT_LIMITS, ...limits },
   });

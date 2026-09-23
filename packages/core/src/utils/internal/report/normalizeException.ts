@@ -2,6 +2,7 @@ import type { MappingLoss } from "src/types/MappingLoss";
 import type { NormalizedError } from "src/types/NormalizedError";
 import type { NormalizedException } from "src/types/NormalizedException";
 import type { PrivacyPolicy } from "src/types/internal/PrivacyPolicy";
+import { isInstanceOf } from "src/utils/common/isInstanceOf";
 import { sanitizeString } from "src/utils/internal/privacy/sanitizeString";
 
 type Origin = NormalizedException["origin"];
@@ -11,11 +12,11 @@ const NON_ERROR_NAME = "NonError";
 const FALLBACK_ERROR_NAME = "Error";
 const NAME_LENGTH = 200;
 
-const isObject = (value: unknown): value is object =>
+const isNonNullObject = (value: unknown): value is object =>
   typeof value === "object" && value !== null;
 
 // A thrown value is hostile input: a getter or a proxy trap can throw on any read.
-const readProperty = (value: object, key: string): unknown => {
+const readGuardedProperty = (value: object, key: string): unknown => {
   try {
     return Reflect.get(value, key);
   } catch {
@@ -24,8 +25,8 @@ const readProperty = (value: object, key: string): unknown => {
 };
 
 // Only strings are kept. Coercing anything else would run its `toString`.
-const readString = (value: object, key: string) => {
-  const read = readProperty(value, key);
+const readStringProperty = (value: object, key: string) => {
+  const read = readGuardedProperty(value, key);
 
   if (typeof read !== "string") {
     return null;
@@ -34,18 +35,7 @@ const readString = (value: object, key: string) => {
   return read;
 };
 
-const isInstanceOf = (
-  value: object,
-  constructor: abstract new (...parameters: never[]) => object,
-) => {
-  try {
-    return value instanceof constructor;
-  } catch {
-    return false;
-  }
-};
-
-const readKeys = (value: object) => {
+const readOwnKeys = (value: object) => {
   try {
     return Object.keys(value);
   } catch {
@@ -67,6 +57,15 @@ const getErrorOrigin = (value: object): Origin | null => {
   return null;
 };
 
+// An Error without a usable name is still an Error to every provider.
+const getErrorName = (name: string | null) => {
+  if (name === null || name === "") {
+    return FALLBACK_ERROR_NAME;
+  }
+
+  return name;
+};
+
 const describeNonError = (origin: Origin, message: string): Described => ({
   origin,
   error: { name: NON_ERROR_NAME, message, stack: null },
@@ -74,7 +73,7 @@ const describeNonError = (origin: Origin, message: string): Described => ({
 
 // Keys say what was thrown without carrying any of its values into the message.
 const describeObject = (value: object): Described => {
-  const keys = readKeys(value);
+  const keys = readOwnKeys(value);
 
   if (keys.length === 0) {
     return describeNonError("object", "Object thrown");
@@ -95,19 +94,19 @@ const describeThrown = (thrown: unknown): Described => {
     return describeNonError("function", "Function thrown");
   }
 
-  if (!isObject(thrown)) {
+  if (!isNonNullObject(thrown)) {
     return describeNonError("primitive", String(thrown));
   }
 
   const origin = getErrorOrigin(thrown);
-  const name = readString(thrown, "name");
+  const name = readStringProperty(thrown, "name");
 
   // An Error from another realm fails `instanceof` but keeps its shape.
   if (origin === null && name === null) {
     return describeObject(thrown);
   }
 
-  const message = readString(thrown, "message");
+  const message = readStringProperty(thrown, "message");
 
   if (origin === null && message === null) {
     return describeObject(thrown);
@@ -116,9 +115,9 @@ const describeThrown = (thrown: unknown): Described => {
   return {
     origin: origin ?? "error-like",
     error: {
-      name: name === null || name === "" ? FALLBACK_ERROR_NAME : name,
+      name: getErrorName(name),
       message: message ?? "",
-      stack: readString(thrown, "stack"),
+      stack: readStringProperty(thrown, "stack"),
     },
   };
 };
@@ -131,8 +130,8 @@ const collectCauses = (
   const seen = new Set<unknown>([thrown]);
   let current = thrown;
 
-  while (isObject(current)) {
-    const cause = readProperty(current, "cause");
+  while (isNonNullObject(current)) {
+    const cause = readGuardedProperty(current, "cause");
 
     if (cause === undefined || seen.has(cause)) {
       return causes;
@@ -156,17 +155,17 @@ const collectAggregated = (
   thrown: unknown,
   { limit, losses }: { limit: number; losses: MappingLoss[] },
 ): unknown[] => {
-  if (!isObject(thrown)) {
+  if (!isNonNullObject(thrown)) {
     return [];
   }
 
-  const errors = readProperty(thrown, "errors");
+  const errors = readGuardedProperty(thrown, "errors");
 
   if (!Array.isArray(errors)) {
     return [];
   }
 
-  const length = readProperty(errors, "length");
+  const length = readGuardedProperty(errors, "length");
 
   if (typeof length !== "number") {
     return [];
@@ -178,7 +177,7 @@ const collectAggregated = (
 
   // Own the array: custom slice or species hooks must not bypass normalization.
   return Array.from({ length: Math.min(length, limit) }, (_, index) =>
-    readProperty(errors, String(index)),
+    readGuardedProperty(errors, String(index)),
   );
 };
 
@@ -195,7 +194,23 @@ export const normalizeException = (
   const { limits } = policy;
   const losses: MappingLoss[] = [];
 
-  const boundError = (error: NormalizedError, path: string): NormalizedError =>
+  const sanitizeStack = (stack: string | null, path: string) => {
+    if (stack === null) {
+      return null;
+    }
+
+    return sanitizeString(stack, {
+      path: `${path}.stack`,
+      maxLength: policy.limits.stackLength,
+      scrub: policy.scrub,
+      losses,
+    });
+  };
+
+  const sanitizeError = (
+    error: NormalizedError,
+    path: string,
+  ): NormalizedError =>
     Object.freeze({
       name: sanitizeString(error.name, {
         path: `${path}.name`,
@@ -209,32 +224,24 @@ export const normalizeException = (
         scrub: policy.scrub,
         losses,
       }),
-      stack:
-        error.stack === null
-          ? null
-          : sanitizeString(error.stack, {
-              path: `${path}.stack`,
-              maxLength: policy.limits.stackLength,
-              scrub: policy.scrub,
-              losses,
-            }),
+      stack: sanitizeStack(error.stack, path),
     });
 
   const described = describeThrown(thrown);
-  const error = boundError(described.error, "exception");
+  const error = sanitizeError(described.error, "exception");
 
   const causes = collectCauses(thrown, {
     limit: limits.causeDepth,
     losses,
   }).map((cause, index) =>
-    boundError(describeThrown(cause).error, `exception.causes.${index}`),
+    sanitizeError(describeThrown(cause).error, `exception.causes.${index}`),
   );
 
   const aggregated = collectAggregated(thrown, {
     limit: limits.aggregatedErrors,
     losses,
   }).map((error, index) =>
-    boundError(describeThrown(error).error, `exception.aggregated.${index}`),
+    sanitizeError(describeThrown(error).error, `exception.aggregated.${index}`),
   );
 
   return {
