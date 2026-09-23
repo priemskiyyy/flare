@@ -178,18 +178,25 @@ try {
     name: "flare-package-consumer",
     private: true,
     type: "module",
-    dependencies: Object.fromEntries(
-      [
-        "react",
-        "react-dom",
-        "@types/react",
-        "@types/react-dom",
-        "vue",
-        "solid-js",
-        "svelte",
-        "typescript",
-      ].map((name) => [name, rootPackage.devDependencies[name]]),
-    ),
+    dependencies: {
+      ...Object.fromEntries(
+        [
+          "react",
+          "react-dom",
+          "@types/react",
+          "@types/react-dom",
+          "vue",
+          "solid-js",
+          "svelte",
+          "typescript",
+        ].map((name) => [name, rootPackage.devDependencies[name]]),
+      ),
+      // Svelte's declarations import esrap's, which since esrap 2.3.10 import
+      // this optional peer; a consumer that checks library types needs it. It
+      // ships in lockstep with typescript-eslint.
+      "@typescript-eslint/types":
+        rootPackage.devDependencies["typescript-eslint"],
+    },
   });
   process.stdout.write(
     "Installing packed packages in an isolated consumer...\n",
