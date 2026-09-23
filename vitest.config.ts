@@ -109,6 +109,16 @@ const exampleProjects: TestProjectConfiguration[] = [
       server: { deps: { inline: [/solid-js/, /@solidjs\/testing-library/] } },
     },
   },
+  {
+    extends: true,
+    plugins: [svelte({ configFile: false })],
+    resolve: { alias: exampleAliases("svelte"), conditions: ["browser"] },
+    test: {
+      name: "example-svelte",
+      include: ["examples/svelte/src/**/*.test.ts"],
+      environment: "jsdom",
+    },
+  },
 ];
 
 // Every adapter is an ordinary node project named after its folder, so a new

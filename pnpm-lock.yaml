@@ -263,6 +263,31 @@ importers:
         specifier: 4.3.3
         version: 4.3.3
 
+  examples/svelte:
+    dependencies:
+      '@priemskiyyy/flare':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@priemskiyyy/flare-devtools':
+        specifier: workspace:*
+        version: link:../../packages/devtools
+      '@priemskiyyy/flare-svelte':
+        specifier: workspace:*
+        version: link:../../packages/svelte
+      example-shared:
+        specifier: workspace:*
+        version: link:../shared
+      svelte:
+        specifier: 5.57.0
+        version: 5.57.0(@typescript-eslint/types@8.70.0)
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: 4.3.3
+        version: 4.3.3(vite@8.3.0(@types/node@22.20.2)(jiti@2.7.0)(terser@5.51.2))
+      tailwindcss:
+        specifier: 4.3.3
+        version: 4.3.3
+
   examples/vue:
     dependencies:
       '@priemskiyyy/flare':

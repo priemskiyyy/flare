@@ -1,0 +1,22 @@
+{
+  "name": "example-svelte",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && vite build",
+    "preview": "vite preview",
+    "lint:typescript": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings"
+  },
+  "dependencies": {
+    "@priemskiyyy/flare": "workspace:*",
+    "@priemskiyyy/flare-devtools": "workspace:*",
+    "@priemskiyyy/flare-svelte": "workspace:*",
+    "example-shared": "workspace:*",
+    "svelte": "5.57.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "tailwindcss": "4.3.3"
+  }
+}
