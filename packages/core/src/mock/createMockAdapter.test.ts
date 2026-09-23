@@ -23,18 +23,15 @@ const context: SubmissionContext = {
   currentGeneration: () => 0,
 };
 
-const openContext = { destination: "mock" };
-
 test("creating the mock opens nothing", () => {
   const mock = createMockAdapter();
 
-  expect(mock.openings).toEqual([]);
   expect(mock.sessions).toEqual([]);
 });
 
-test("by default a submission is recorded and answered at once", async () => {
+test("by default a submission is recorded and answered at once", () => {
   const mock = createMockAdapter();
-  const session = await mock.adapter.open(openContext);
+  const session = mock.adapter.open();
 
   expect(session.submit(report, context)).toEqual({
     status: "submitted",
@@ -49,7 +46,7 @@ test("by default a submission is recorded and answered at once", async () => {
 
 test("a held submission waits for the test to answer it", async () => {
   const mock = createMockAdapter({ hold: true });
-  const session = await mock.adapter.open(openContext);
+  const session = mock.adapter.open();
 
   const pending = session.submit(report, context);
 
@@ -63,7 +60,7 @@ test("a held submission waits for the test to answer it", async () => {
 
 test("a held submission can be failed like a rejecting provider", async () => {
   const mock = createMockAdapter({ hold: true });
-  const session = await mock.adapter.open(openContext);
+  const session = mock.adapter.open();
   const failure = new Error("network down");
 
   const pending = session.submit(report, context);
@@ -73,7 +70,7 @@ test("a held submission can be failed like a rejecting provider", async () => {
   await expect(pending).rejects.toBe(failure);
 });
 
-test("a submit hook can throw like a synchronous provider failure, or answer", async () => {
+test("a submit hook can throw like a synchronous provider failure, or answer", () => {
   const failure = new Error("sdk threw");
 
   const throwing = createMockAdapter({
@@ -86,8 +83,8 @@ test("a submit hook can throw like a synchronous provider failure, or answer", a
     onSubmit: () => ({ status: "dropped", reason: "provider-filtered" }),
   });
 
-  const throwingSession = await throwing.adapter.open(openContext);
-  const answeringSession = await answering.adapter.open(openContext);
+  const throwingSession = throwing.adapter.open();
+  const answeringSession = answering.adapter.open();
 
   expect(() => throwingSession.submit(report, context)).toThrow(failure);
   expect(answeringSession.submit(report, context)).toEqual({
@@ -96,22 +93,7 @@ test("a submit hook can throw like a synchronous provider failure, or answer", a
   });
 });
 
-test("a held open waits for the test, and can fail like a provider that will not start", async () => {
-  const starting = createMockAdapter({ holdOpen: true });
-  const failing = createMockAdapter({ holdOpen: true });
-  const failure = new Error("init failed");
-
-  const opened = starting.adapter.open(openContext);
-  const rejected = failing.adapter.open(openContext);
-
-  starting.openings[0]?.settle();
-  failing.openings[0]?.fail(failure);
-
-  await expect(opened).resolves.toMatchObject({ native: starting.sessions[0] });
-  await expect(rejected).rejects.toBe(failure);
-});
-
-test("an open hook can throw like a synchronous startup failure", () => {
+test("an open hook can throw like a provider that fails to start", () => {
   const failure = new Error("native module missing");
 
   const mock = createMockAdapter({
@@ -120,32 +102,28 @@ test("an open hook can throw like a synchronous startup failure", () => {
     },
   });
 
-  expect(() => mock.adapter.open(openContext)).toThrow(failure);
+  expect(() => mock.adapter.open()).toThrow(failure);
   expect(mock.sessions).toEqual([]);
 });
 
-test("flush and ambient exist only when asked for, and capabilities say so", async () => {
-  const bare = createMockAdapter();
-  const full = createMockAdapter({ flush: true, ambient: true });
+test("flush and ambient exist only when asked for", () => {
+  const bare = createMockAdapter().adapter.open();
+  const full = createMockAdapter({ flush: true, ambient: true }).adapter.open();
 
-  const bareSession = await bare.adapter.open(openContext);
-  const fullSession = await full.adapter.open(openContext);
-
-  expect("flush" in bareSession).toBe(false);
-  expect("ambient" in bareSession).toBe(false);
-  expect(bare.adapter.capabilities.flush).toBe("none");
-  expect(typeof fullSession.flush).toBe("function");
-  expect(full.adapter.capabilities.flush).toBe("sdk-queue");
+  expect("flush" in bare).toBe(false);
+  expect("ambient" in bare).toBe(false);
+  expect(typeof full.flush).toBe("function");
+  expect(typeof full.ambient?.session).toBe("function");
 });
 
-test("ambient calls are recorded", async () => {
+test("ambient calls are recorded", () => {
   const mock = createMockAdapter({ ambient: true });
-  const session = await mock.adapter.open(openContext);
+  const session = mock.adapter.open();
   const snapshot = { generation: 1, user: null, tags: {}, contexts: {} };
   const crumb = { name: "opened", data: null, timestamp: 1 };
 
-  session.ambient?.session?.(snapshot);
-  session.ambient?.breadcrumb?.(crumb);
+  session.ambient?.session(snapshot);
+  session.ambient?.breadcrumb(crumb);
 
   expect(mock.sessions[0]?.ambient).toEqual({
     sessions: [snapshot],
@@ -155,25 +133,12 @@ test("ambient calls are recorded", async () => {
 
 test("the mock never guards itself, so tests can act after disposal", async () => {
   const mock = createMockAdapter();
-  const session = await mock.adapter.open(openContext);
+  const session = mock.adapter.open();
 
-  await session.dispose();
-  await session.dispose();
+  await session.dispose?.();
+  await session.dispose?.();
   session.submit(report, context);
 
   expect(mock.sessions[0]?.disposeCount).toBe(2);
   expect(mock.submissions).toHaveLength(1);
-});
-
-test("availability and capabilities can be set", () => {
-  const mock = createMockAdapter({
-    available: { available: false, reason: "not on this platform" },
-    capabilities: { messages: false },
-  });
-
-  expect(mock.adapter.available()).toEqual({
-    available: false,
-    reason: "not on this platform",
-  });
-  expect(mock.adapter.capabilities.messages).toBe(false);
 });
