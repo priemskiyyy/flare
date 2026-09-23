@@ -19,31 +19,47 @@ const workspace = fileURLToPath(new URL("..", import.meta.url));
 const output = path.join(workspace, ".artifacts", "snippets");
 const FRAGMENT = "<!-- snippet: fragment -->";
 
-const entries = {
-  "@priemskiyyy/flare": "packages/core/dist/index.d.ts",
-  "@priemskiyyy/flare/mock": "packages/core/dist/mock.d.ts",
-  "@priemskiyyy/flare/testing": "packages/core/dist/testing.d.ts",
-  "@priemskiyyy/flare-react": "packages/react/dist/index.d.ts",
-  "@priemskiyyy/flare-vue": "packages/vue/dist/index.d.ts",
-  "@priemskiyyy/flare-solid": "packages/solid/dist/index.d.ts",
-  "@priemskiyyy/flare-svelte": "packages/svelte/dist/index.d.ts",
-  "@priemskiyyy/flare-devtools": "packages/devtools/dist/index.d.ts",
-  "@priemskiyyy/flare-devtools/react": "packages/devtools/dist/react.d.ts",
-  "@priemskiyyy/flare-devtools/vue": "packages/devtools/dist/vue.d.ts",
-  "@priemskiyyy/flare-devtools/solid": "packages/devtools/dist/solid.d.ts",
-  "@priemskiyyy/flare-devtools/svelte": "packages/devtools/dist/svelte.d.ts",
-  "@priemskiyyy/flare-trace": "packages/trace/dist/index.d.ts",
-  "@priemskiyyy/flare-console": "packages/adapters/console/dist/index.d.ts",
-  "@priemskiyyy/flare-http": "packages/adapters/http/dist/index.d.ts",
-  "@priemskiyyy/flare-sentry": "packages/adapters/sentry/dist/index.d.ts",
-  "@priemskiyyy/flare-sentry/react-native":
-    "packages/adapters/sentry/dist/reactNative.d.ts",
-  "@priemskiyyy/flare-bugsnag": "packages/adapters/bugsnag/dist/index.d.ts",
-  "@priemskiyyy/flare-bugsnag/react-native":
-    "packages/adapters/bugsnag/dist/reactNative.d.ts",
-  "@priemskiyyy/flare-crashlytics":
-    "packages/adapters/crashlytics/dist/index.d.ts",
+// Every published entry, read from each package's own `exports`, so a new
+// package is checked without being listed here.
+const entryName = (packageName, subpath) => {
+  if (subpath === ".") {
+    return packageName;
+  }
+
+  return `${packageName}/${subpath.slice("./".length)}`;
 };
+
+const entries = Object.fromEntries(
+  ["packages", "packages/adapters"].flatMap((group) =>
+    readdirSync(path.join(workspace, group))
+      .filter((directory) =>
+        existsSync(path.join(workspace, group, directory, "package.json")),
+      )
+      .flatMap((directory) => {
+        const manifest = JSON.parse(
+          readFileSync(
+            path.join(workspace, group, directory, "package.json"),
+            "utf8",
+          ),
+        );
+
+        return Object.entries(manifest.exports ?? {}).flatMap(
+          ([subpath, target]) => {
+            if (typeof target?.types !== "string") {
+              return [];
+            }
+
+            return [
+              [
+                entryName(manifest.name, subpath),
+                path.join(group, directory, target.types),
+              ],
+            ];
+          },
+        );
+      }),
+  ),
+);
 
 const listMarkdown = (directory) =>
   readdirSync(path.join(workspace, directory), { withFileTypes: true }).flatMap(
