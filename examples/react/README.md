@@ -1,6 +1,6 @@
-# Flare React example
+# Ledger, a Flare example
 
-A small Vite and React application that shows the parts of [Flare](../../README.md) that are hard to see from an API listing. It needs no provider account and no server: the HTTP adapter posts to an in-page fake backend.
+Ledger is an invoicing app for two companies, built to show where each [Flare](../../README.md) error report goes. Every destination is a real Flare adapter: your API over `@priemskiyyy/flare-http`, the console, and Sentry, PostHog and Datadog over SDKs simulated in the page. Nothing leaves your browser, and no provider account is needed.
 
 ```sh
 pnpm install
@@ -10,29 +10,43 @@ pnpm --filter example-react dev
 
 The packages are linked from the workspace, so build them first.
 
-## What to try
+## The tour
 
-- **Report a payment failure.** The latest-report panel shows each destination settling. The console settles at once with `sdk-call-returned`. The demo backend settles after 400 ms with `backend-acknowledged` and an event id. Its sanitized payload is visible in the panel: `cardToken` becomes `"[Redacted]"` because the key matches a default redaction rule. Expand **Receipt JSON** for the full receipt.
-- **Sign in, then report.** The report carries the user and a `signedIn` breadcrumb. Sign in as someone else and report again: the first account's breadcrumb is gone.
-- **Start an upload, then switch account before it fails.** The upload takes three seconds and reports through a scope, which remembers who was signed in when it started. The panel explains why the report was not sent, and the receipt reads `dropped` with `stale-scope`. Let it fail without switching, and it is reported normally. A pending upload disables its button and is cancelled when the component unmounts.
-- **Break the widget.** The error boundary reports the render error with React's component stack as the `react` context, and its fallback resets the widget.
-- **Open the devtools.** The Flare button opens both destinations with what they declared, and the timeline follows each report from `report accepted` to its `destination outcome`. It never shows report content. The example's separate payload inspector shows only what the demo backend actually received.
+The page walks through five sections, each with a "Try this" hint:
 
-On narrow screens, **View latest report** jumps to the receipt below the scenarios. **Clear view** hides the current receipt without changing the account or resetting the runtime.
+1. **Make something fail.** Ledger opens signed in as Ada at Acme, and every button fails on purpose: paying declines the card, a reminder bounces, the upload times out, and breaking the preview throws while rendering. The report appears beside the app under **Latest report**, with every destination, what it answered and why, and the name Flare's API gives that answer. A destination that routing left out shows as **Not routed**. **What every destination received** opens the report as it was sent, with each value Flare hid highlighted.
+2. **Every report, accounted for.** Every receipt stays listed and opens to the same detail, above a legend of what each answer means. An upload started as Ada and finished as Grace is dropped as `stale-scope` rather than charged to Grace.
+3. **One report, five destinations.** Billing reports go only to your API, Sentry and the console. Everything else goes to Sentry, PostHog, Datadog and the console. A reminder is a message, which PostHog and Datadog skip as `unsupported-report-kind`, and its email address arrives scrubbed. **Flush** shows how far each destination's own flush got.
+4. **Break the destinations.** Slow your API past the 3 second timeout and its outcome is `indeterminate`, not `failed`. Take it offline and only its outcome fails. Make PostHog's own filters drop every event, report the same error twice, or restart with Sentry uninitialized and watch its reports wait for a retried start.
+5. **Watch it happen.** The timeline is Flare's diagnostics stream, in words: destinations opening, reports accepted and each answer, with no report content. Restart without starting, pay, then press **Start**: the report waited in the buffer.
 
-## Where to look
+**Reset demo** in the header starts over. The devtools button in the corner opens Flare's own inspector over the same runtime.
 
-| File                                         | What it shows                                                                                     |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `src/main.tsx`                               | One application runtime started outside React, the provider, devtools, and cleanup on hot reload. |
-| `src/reporting/createExampleFlare.ts`        | Destination configuration, Zod schemas, and the `Register` declaration.                           |
-| `src/backend/createExampleBackend.ts`        | An abortable in-page `fetch` and an observable copy of its latest sanitized request.              |
-| `src/Application.tsx`                        | The page layout and the selected receipt.                                                         |
-| `src/components/Header/Header.tsx`           | Account controls and `useDestinationStatus`.                                                      |
-| `src/components/Scenarios/`                  | Separate capture, scope, and error-boundary examples.                                             |
-| `src/components/ReportPanel/ReceiptView.tsx` | Observable receipt and request inspection with `useSyncExternalStore`.                            |
-| `src/Application.test.tsx`                   | The flows driven through the buttons, with a fresh backend and runtime per test.                  |
+## How it fits together
 
-Styles live beside their components; `src/styles.css` holds the shared palette, base elements, and page layout. There is no UI framework or extra runtime dependency.
+| File                                    | Role                                                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `src/main.tsx`                          | Starts Ledger once, outside React, and renders it.                                                |
+| `src/utils/startLedger.ts`              | Creates the backend, the SDKs and the first runtime, signs Ada in and starts it, as the tests do. |
+| `src/reporting/createLedgerFlare.ts`    | The destinations, `defaults.to`, the Zod schema, redaction, scrubbing and the timeout.            |
+| `src/reporting/createLedgerRuntime.ts`  | One Flare with its receipts, console lines and diagnostics timeline. A restart is a new one.      |
+| `src/backend/createReportBackend.ts`    | Your API and its client: latency, an outage, a single failure, and the network log.               |
+| `src/providers/`                        | The simulated Sentry, PostHog and Datadog SDKs, each typed with its adapter's `*Like` type.       |
+| `src/utils/switchAccount.ts`            | What the app does on sign-in: PostHog and Datadog get the user too, as they need.                 |
+| `src/components/Ledger/`                | The product: capture, message, a scope, and `FlareErrorBoundary`.                                 |
+| `src/components/Report/`                | The latest report and each receipt's detail: every destination's answer, and the payload.         |
+| `src/formatting/`                       | Outcomes, drop reasons and diagnostic events in plain words.                                      |
+| `src/components/Receipts/`, `Timeline/` | Observable receipts and diagnostics, read with `useSyncExternalStore`.                            |
+| `src/Application.test.tsx`              | The flows driven through the buttons, with a fresh backend and runtime per test.                  |
 
-The tests run with the workspace under `pnpm test:unit`. Build this application separately with `pnpm --filter example-react build`; the root `pnpm build` builds the library packages. To use a real backend, remove the injected `fetch` from the HTTP adapter configuration and point `endpoint` at your server.
+Styling is Tailwind with a few `class-variance-authority` recipes in `src/styles/`, and icons come from Phosphor, as in the sibling libraries' examples.
+
+## Using a real provider
+
+Swap a simulated SDK for the real one the application initializes, such as `sentry({ sdk: Sentry })` after `Sentry.init`, and give the HTTP adapter a `request` over your own API client. Nothing else in the app changes.
+
+## Tests
+
+`pnpm test:unit` runs the example's tests in jsdom against the built packages. They start Ledger the way the page does and drive the flows through the buttons, with a fresh backend and runtime per test: routing, including a destination it leaves out, redaction and the payload's highlights, skipped messages, the error boundary, a stale scope, an offline or slow API, account isolation, the startup buffer, dedupe and the timeline's wording.
+
+`pnpm test:examples` builds the packages and drives the built page in Chromium with Playwright (`../ledger.spec.ts`). At 375 and 1280 px wide, a payment settles with no page errors and no horizontal scroll, reaching your API and leaving PostHog out. It also checks that the payload shows the card token and the IBAN as `[Redacted]` and marks both, that an upload outliving an account switch is dropped as `stale-scope`, that **Reset demo** starts over signed in as Ada, and that the devtools open and list all five destinations. It is not part of `pnpm check`.
