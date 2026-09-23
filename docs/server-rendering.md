@@ -10,7 +10,7 @@ No Flare package does anything on import. `new Flare()` allocates plain objects:
 
 Work begins at `start()`. Whether to call it on the server is your choice:
 
-- **Client only.** Call `start()` from client code. On the server, captures are buffered for a minute and then dropped, which costs a little memory and sends nothing.
+- **Client only.** Call `start()` from client code. On the server, captures wait in the buffer for `buffer.maxAge`, a minute by default, and are then dropped as `buffer-expired`, which costs a little memory and sends nothing.
 - **Server too.** Call `start()` on the server with destinations that make sense there, such as the HTTP adapter or a server-side provider SDK.
 
 ## One Flare, many requests
@@ -28,6 +28,7 @@ const handleRequest = async (request: Request, userId: string) => {
     return await respond(request);
   } catch (error) {
     scope.capture(error);
+
     return new Response("Internal error", { status: 500 });
   }
 };
@@ -45,7 +46,9 @@ const handleFetch = async (
   context: { waitUntil: (work: Promise<unknown>) => void },
 ) => {
   const response = await respond(request);
-  context.waitUntil(flare.flush({ timeoutMs: 2000 }));
+
+  context.waitUntil(flare.flush({ timeout: 2000 }));
+
   return response;
 };
 ```
@@ -61,7 +64,7 @@ In every binding, the provider and the status readers render on the server witho
 | Solid   | Is caught. The boundary reports it through the server's Flare and renders the fallback. Solid replays the error while hydrating, so the client's boundary reports it again through the client's Flare. |
 | Svelte  | Is not caught by a boundary. The error leaves `render()` when the markup is read. Catch it there and report it.                                                                                        |
 
-The Vue, Solid and Svelte rows are pinned by tests in this repository. The React row is React's documented rule.
+The Vue and Svelte rows, and the server half of the Solid row, are pinned by tests in this repository. The Solid hydration replay and the React row are the frameworks' documented behavior.
 
 ## React on the server
 
