@@ -1,7 +1,7 @@
 {
   "name": "@priemskiyyy/flare-devtools",
   "version": "0.1.0",
-  "description": "Devtools for flare: a framework-independent inspector for destination statuses and capabilities, buffers, pending receipts and a payload-free timeline, with React, Vue, Solid and Svelte wrappers.",
+  "description": "Devtools for flare: a framework-independent inspector for destination statuses, buffers, pending receipts and a payload-free timeline, with React, Vue, Solid and Svelte wrappers.",
   "type": "module",
   "license": "MIT",
   "repository": {

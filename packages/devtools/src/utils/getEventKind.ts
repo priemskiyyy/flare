@@ -9,7 +9,6 @@ const REFUSALS = new Set([
   "report dropped",
   "rate limit reached",
   "session change rejected",
-  "destination unavailable",
 ]);
 
 const isSubmitted = (context: unknown) =>

@@ -1,7 +1,5 @@
-import { Show, createMemo } from "solid-js";
 import type { FlareSnapshot } from "@priemskiyyy/flare";
 
-import { DestinationDetail } from "src/components/Destinations/DestinationDetail";
 import { DestinationList } from "src/components/Destinations/DestinationList";
 import { PanelHeader } from "src/components/Panel/PanelHeader";
 import { ResizeHandle } from "src/components/Panel/ResizeHandle";
@@ -9,7 +7,21 @@ import { Timeline } from "src/components/Timeline/Timeline";
 import { useAutoFocus } from "src/hooks/useAutoFocus";
 import { useEventFilters } from "src/hooks/useEventFilters";
 import type { PanelPosition } from "src/types/PanelPosition";
+import { assertUnreachable } from "src/utils/assertUnreachable";
 import type { RecordedEvent } from "src/utils/EventLog";
+
+// A panel docked to an edge is sized away from it.
+const toPanelSize = (position: PanelPosition, size: number) => {
+  if (position === "bottom") {
+    return { height: `${size}px` };
+  }
+
+  if (position === "right") {
+    return { width: `${size}px` };
+  }
+
+  return assertUnreachable(position);
+};
 
 type DevtoolsPanelProps = {
   snapshot: FlareSnapshot;
@@ -31,21 +43,6 @@ export const DevtoolsPanel = (props: DevtoolsPanelProps) => {
   const focusOnMount = useAutoFocus(props.autoFocus);
   const filters = useEventFilters(() => props.events);
 
-  // The selection names a destination; the snapshot says whether it still exists.
-  const selectedDestination = createMemo(() => {
-    const selected = filters.filters().destination;
-
-    if (selected === null) {
-      return null;
-    }
-
-    return (
-      props.snapshot.destinations.find(
-        (destination) => destination.name === selected,
-      ) ?? null
-    );
-  });
-
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key !== "Escape") {
       return;
@@ -62,11 +59,7 @@ export const DevtoolsPanel = (props: DevtoolsPanelProps) => {
       class="panel"
       data-position={props.position}
       aria-label="Flare devtools"
-      style={
-        props.position === "bottom"
-          ? { height: `${props.size}px` }
-          : { width: `${props.size}px` }
-      }
+      style={toPanelSize(props.position, props.size)}
       onKeyDown={handleKeyDown}
     >
       <ResizeHandle
@@ -87,14 +80,6 @@ export const DevtoolsPanel = (props: DevtoolsPanelProps) => {
           onSelect={(destination) => filters.update({ destination })}
         />
         <div class="main">
-          <Show when={selectedDestination()}>
-            {(destination) => (
-              <DestinationDetail
-                destination={destination()}
-                onClose={() => filters.update({ destination: null })}
-              />
-            )}
-          </Show>
           <Timeline
             events={props.events}
             isPaused={props.isPaused}

@@ -19,15 +19,13 @@ button, input { font: inherit; color: inherit; letter-spacing: normal; }
 button { cursor: pointer; border: 1px solid var(--border); border-radius: 8px; background: var(--raised); padding: 5px 11px; transition: background 120ms, border-color 120ms; }
 button:hover { background: var(--hover); }
 :is(button, input, summary, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-p, h3, dl, dd { margin: 0; }
+p { margin: 0; }
 code, pre { font: var(--mono); background: none; padding: 0; }
 .muted { color: var(--muted); }
 .brand-icon { flex-shrink: 0; color: var(--accent); }
 .dot { display: inline-block; flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .dot:is([data-state="started"], [data-state="ready"]) { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
-.dot[data-state="starting"] { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
-.dot:is([data-state="error"], [data-state="failed"], [data-state="unavailable"]) { background: var(--error); box-shadow: 0 0 0 3px color-mix(in srgb, var(--error) 25%, transparent); }
-@keyframes pulse { 50% { opacity: 0.35; } }
+.dot:is([data-state="error"], [data-state="failed"]) { background: var(--error); box-shadow: 0 0 0 3px color-mix(in srgb, var(--error) 25%, transparent); }
 .launcher { position: fixed; z-index: ${Z_INDEX_DEVTOOLS}; right: 20px; bottom: 20px; display: inline-flex; align-items: center; gap: 10px; border-radius: 999px; padding: 9px 15px 9px 12px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(10px); box-shadow: 0 12px 32px -12px #000c, inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent); font-weight: 500; transition: transform 120ms, background 120ms; }
 .launcher:hover { transform: translateY(-1px); }
 .panel { container-type: inline-size; position: fixed; z-index: ${Z_INDEX_DEVTOOLS}; left: 16px; right: 16px; bottom: 16px; max-height: calc(100dvh - 24px); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter: blur(16px); box-shadow: 0 28px 80px -24px #000d; }
@@ -40,8 +38,7 @@ code, pre { font: var(--mono); background: none; padding: 0; }
 .header { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 4px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
 .status { display: inline-flex; align-items: center; gap: 7px; padding: 2px 9px 2px 8px; border: 1px solid var(--border); border-radius: 999px; font: var(--mono); white-space: nowrap; }
 .status:is([data-state="started"], [data-state="ready"]) { border-color: color-mix(in srgb, var(--ok) 40%, transparent); color: var(--ok); }
-.status[data-state="starting"] { border-color: color-mix(in srgb, var(--warn) 40%, transparent); color: var(--warn); }
-.status:is([data-state="failed"], [data-state="unavailable"]) { border-color: color-mix(in srgb, var(--error) 40%, transparent); color: var(--error); }
+.status[data-state="failed"] { border-color: color-mix(in srgb, var(--error) 40%, transparent); color: var(--error); }
 .counters { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); white-space: nowrap; }
 .icon-button { display: inline-flex; padding: 5px; border: 0; background: transparent; color: var(--muted); }
 .icon-button:hover { color: var(--text); background: var(--hover); }
@@ -54,14 +51,6 @@ code, pre { font: var(--mono); background: none; padding: 0; }
 .destination-empty { padding: 4px 10px 6px; color: var(--muted); font-size: 11px; font-style: italic; }
 .count { margin-left: auto; padding: 0 6px; border-radius: 999px; background: var(--hover); font-size: 10px; font-variant-numeric: tabular-nums; }
 .main { min-height: 0; display: flex; flex-direction: column; }
-.detail { flex-shrink: 0; max-height: 50%; overflow: auto; border-bottom: 1px solid var(--border); background: var(--raised); }
-.detail-header { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 8px 14px 6px; }
-.detail-key { color: var(--accent-text); overflow-wrap: anywhere; }
-.detail-close { margin-left: auto; }
-.detail-reason { padding: 0 14px 8px; color: var(--error); overflow-wrap: anywhere; font-size: 11px; }
-.capabilities { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr); gap: 4px 14px; padding: 0 14px 12px; font: var(--mono); }
-.capabilities dt { color: var(--muted); }
-.capabilities dd { overflow-wrap: anywhere; }
 .timeline { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 12px 6px; }
 .toolbar input[type="search"] { flex: 1; min-width: 160px; height: 30px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; background: var(--bg); }
@@ -109,7 +98,6 @@ details[open] .expand { transform: rotate(180deg); }
   .header { gap: 8px; padding: 4px 10px; }
   .body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(96px, 28%) minmax(0, 1fr); }
   .destinations { border-right: 0; border-bottom: 1px solid var(--border); }
-  .capabilities { grid-template-columns: max-content minmax(0, 1fr); }
   /* No room for the destination and report columns at phone width. They are in the sidebar and the expanded context. */
   .event summary { grid-template-columns: 82px 150px minmax(0, 1fr) 10px; gap: 6px; padding: 7px 9px; }
   .event-destination, .event-report { display: none; }
