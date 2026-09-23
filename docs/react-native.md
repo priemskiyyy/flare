@@ -1,14 +1,14 @@
 ---
-description: "Set up Flare in React Native and Expo with the React Native builds of the Sentry and Bugsnag adapters, Crashlytics, and a flush when the app goes to the background."
+description: "Set up Flare in React Native and Expo with the React Native SDKs of Sentry, Bugsnag, PostHog and Datadog, with Crashlytics, and with a flush when the app goes to the background."
 ---
 
 # React Native and Expo
 
-The core, the React bindings, the HTTP adapter and the console adapter are the same packages on every platform. Sentry and Bugsnag have a React Native entry, and Crashlytics is React Native only.
+The core, the React bindings, the HTTP adapter and the console adapter are the same packages on every platform. The Sentry and Bugsnag adapters take their React Native SDK through the same factory as the browser one. PostHog and Datadog have a React Native SDK with its own API, so each has its own React Native package: `@priemskiyyy/flare-posthog-react-native` and `@priemskiyyy/flare-datadog-react-native`. Crashlytics is React Native only.
 
 ```ts
 import { Flare } from "@priemskiyyy/flare";
-import { sentry } from "@priemskiyyy/flare-sentry/react-native";
+import { sentry } from "@priemskiyyy/flare-sentry";
 import * as Sentry from "@sentry/react-native";
 
 Sentry.init({ dsn });
@@ -20,24 +20,48 @@ export const flare = new Flare({
 flare.start();
 ```
 
-The React Native entry differs from the browser one in what it declares, not in how it maps a report: events are persisted by the native SDK, and a flush is a handoff to it. Both entries accept either SDK, so TypeScript will not catch a mix-up. Use the entry that matches your SDK, or the capabilities shown on receipts and in the devtools will be wrong.
+The adapter is the same one the browser uses: a report is mapped the same way whichever SDK you pass. What differs is the SDK itself. On React Native it persists events on the device and sends them later, and `flare.flush()` hands events to the native layer rather than waiting for them to be sent.
+
+PostHog and Datadog use their React Native packages instead, with the client or module your application set up:
+
+```sh
+pnpm add @priemskiyyy/flare-posthog-react-native posthog-react-native
+pnpm add @priemskiyyy/flare-datadog-react-native @datadog/mobile-react-native
+```
+
+```ts
+import { DdRum } from "@datadog/mobile-react-native";
+import { Flare } from "@priemskiyyy/flare";
+import { datadog } from "@priemskiyyy/flare-datadog-react-native";
+import { posthog } from "@priemskiyyy/flare-posthog-react-native";
+import PostHog from "posthog-react-native";
+
+const client = new PostHog("phc_project_api_key");
+
+export const flare = new Flare({
+  destinations: {
+    posthog: posthog({ sdk: client }),
+    datadog: datadog({ sdk: DdRum }),
+  },
+});
+```
 
 ## Who owns native crashes
 
-The provider's native SDK does, entirely. A native crash ends the JavaScript runtime, so no JavaScript library can report it. The native SDK writes it to disk and sends it on the next launch. Flare reports the JavaScript errors you catch, and the [ambient mirror](automatic-capture.md) is how a native crash gets the same user, tags and breadcrumbs.
+The provider's native SDK does, entirely. A native crash ends the JavaScript runtime, so no JavaScript library can report it. The native SDK writes it to disk and sends it on the next launch. Flare reports the JavaScript errors you catch. With Sentry, Bugsnag and Crashlytics, the [ambient mirror](automatic-capture.md) is how a native crash gets the same user, tags and breadcrumbs. Datadog and PostHog have no mirror: what their SDKs capture by themselves carries the user your application set with `DdSdkReactNative.setUserInfo` or `identify`.
 
 Flare does not replace `ErrorUtils.setGlobalHandler`. Your provider SDK already did.
 
 ## Flush in the background
 
-An app that goes to the background may be suspended at any time:
+An app that goes to the background may be suspended at any time. Sentry hands its events to the native SDK, and PostHog sends the client's queue; the other adapters have no flush of their own, so `flare.flush()` only waits for their submissions:
 
 ```ts
 import { AppState } from "react-native";
 
 const subscription = AppState.addEventListener("change", (state) => {
   if (state === "background") {
-    flare.flush({ timeoutMs: 1500 });
+    flare.flush({ timeout: 1500 });
   }
 });
 ```
