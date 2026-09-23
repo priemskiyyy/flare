@@ -1,7 +1,7 @@
 {
   "name": "@priemskiyyy/flare-http",
   "version": "0.1.0",
-  "description": "HTTP destination for flare: posts sanitized error reports to your own backend with an idempotency key, backend acknowledgement as evidence, and credentials that never cross accounts.",
+  "description": "HTTP destination for flare: sends each sanitized error report through your own client, with backend acknowledgement as evidence and reports that never cross accounts.",
   "type": "module",
   "license": "MIT",
   "repository": {
