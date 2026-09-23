@@ -9,7 +9,7 @@ flare.user({ id: "user_42", email: "ada@example.com", name: "Ada" });
 flare.user(null);
 ```
 
-A user has an `id`, and optionally an `email` and a `name`. The `id` is required, because it is what tells two accounts apart.
+A user has an `id`, and optionally an `email` and a `name`. The `id` is required, because it is what tells two accounts apart. An empty `id` names no account: it signs the user out and records a `user` loss with the reason `invalid`.
 
 ## An id change starts a new identity
 
@@ -41,12 +41,14 @@ If the account changed while `uploadAvatar()` was running, the capture is droppe
 
 ## Reports in flight
 
-A report is complete and frozen when `capture()` returns, including the user it belongs to. A report that is still waiting in the startup buffer when the account changes keeps its original user and is delivered with it.
-
-Providers whose SDK keeps the user globally make this harder, and each adapter handles it for you:
+A report is complete and frozen when `capture()` returns, including the user it belongs to. A report that is still waiting in the startup buffer when the account changes keeps its original user. A destination that cannot file it under that user skips it rather than attribute it to the next account:
 
 - **Sentry and Bugsnag** apply the report's own user to that one event and clear anything the ambient mirror wrote for a different account.
-- **Crashlytics** cannot attach a user to one report. When the ambient user is mirrored and differs from the report's user, the adapter skips the report with the reason `identity-mismatch` instead of filing it under the wrong account.
+- **OpenTelemetry** writes the report's own user on its log record.
+- **Datadog, Datadog Logs and PostHog** attach the user their SDK holds to every event, so they send a report only while that user is the report's own, and otherwise skip it as `identity-mismatch`. Give the SDK and `flare.user` the same id. PostHog on React Native does the same with the client's distinct id.
+- **Datadog on React Native** cannot read the user its SDK holds, so it skips a report whose account changed since it was captured, as `identity-mismatch`.
+- **Crashlytics** cannot attach a user to one report. With `ambient.user`, it skips a report whose user differs from the mirrored id. Without it, it skips a report whose account changed since it was captured. Both are `identity-mismatch`.
+- **HTTP** authenticates as whoever is signed in now, so it skips a report with a user whose account changed since it was captured, as `auth-subject-mismatch`.
 
 See [provider limitations](provider-limitations.md).
 
@@ -57,8 +59,8 @@ flare.capture(error, { user: { id: "user_7" } });
 flare.capture(error, { user: null });
 ```
 
-The `user` option overrides the session user for that report only. It does not start a new identity.
+The `user` option overrides the session user for that report only. It does not start a new identity. A destination that compares with its SDK's own user, such as PostHog, Datadog or Crashlytics with `ambient.user`, skips such a report unless the SDK names that user too.
 
 ## What Flare does with the id
 
-The id goes through redaction like everything else. Flare keeps the real id in memory only to compare accounts, so two different accounts can never look like one because both ids were redacted to the same text.
+The id goes through `redact`, never through `scrub`. Flare keeps the real id in memory only to compare accounts, so two different accounts can never look like one because both ids were redacted to the same text.
