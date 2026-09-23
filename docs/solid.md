@@ -55,6 +55,8 @@ With server rendering, Solid's boundary catches on the server too. The error is 
 
 ## Type it once
 
+<!-- snippet: fragment -->
+
 ```ts
 declare module "@priemskiyyy/flare-solid" {
   interface Register {

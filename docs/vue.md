@@ -54,11 +54,13 @@ const handleSaveClick = () => save().catch(flare.value.capture);
 
 ## What the boundary sees
 
-Vue's error capture is wider than React's. The boundary reports render errors, and also errors thrown by event handlers, watchers and lifecycle hooks in the tree below it. It adds where Vue caught the error as the `vue` context.
+Vue's error capture is wider than React's. The boundary reports render errors, and also errors thrown by event handlers, watchers and lifecycle hooks in the tree below it. It adds where Vue caught the error as the `vue` context, `{ info }`. With a typed schema, declare that context, or it is dropped and recorded as a loss.
 
 A captured error stops at the boundary and does not reach `app.config.errorHandler`. If your provider SDK's Vue integration installs that handler, the error is therefore reported once, by Flare. On the server the boundary reports too, but renders nothing in place of the failed tree. See [server rendering](server-rendering.md). Errors outside any boundary still reach that handler, and whoever owns it reports them. See [automatic capture ownership](automatic-capture.md).
 
 ## Type it once
+
+<!-- snippet: fragment -->
 
 ```ts
 declare module "@priemskiyyy/flare-vue" {

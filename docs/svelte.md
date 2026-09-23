@@ -60,6 +60,8 @@ On the server a Svelte boundary catches nothing. See [server rendering](server-r
 
 ## Type it once
 
+<!-- snippet: fragment -->
+
 ```ts
 declare module "@priemskiyyy/flare-svelte" {
   interface Register {
