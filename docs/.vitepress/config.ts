@@ -153,9 +153,11 @@ export default defineConfig({
         ],
       },
       { text: "Devtools", link: "/devtools" },
+      { text: "Example", link: "/examples" },
       {
         text: "Reference",
         items: [
+          { text: "Configuration", link: "/configuration" },
           { text: "Writing an adapter", link: "/writing-an-adapter" },
           { text: "Verification matrix", link: "/verification" },
           { text: "Runtime architecture", link: "/internals/architecture" },
@@ -170,6 +172,8 @@ export default defineConfig({
           { text: "Getting started", link: "/getting-started" },
           { text: "Installation", link: "/installation" },
           { text: "The mental model", link: "/mental-model" },
+          { text: "Configuration", link: "/configuration" },
+          { text: "Example application", link: "/examples" },
         ],
       },
       {
