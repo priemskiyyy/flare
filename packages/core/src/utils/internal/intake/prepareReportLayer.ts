@@ -4,24 +4,13 @@ import type { MappingLoss } from "src/types/MappingLoss";
 import type { ReportOptions } from "src/types/ReportOptions";
 import type { PrivacyPolicy } from "src/types/internal/PrivacyPolicy";
 import type { ReportLayer } from "src/types/internal/ReportLayer";
-import { isRecord } from "src/utils/common/isRecord";
 import { prepareContexts } from "src/utils/internal/intake/prepareContexts";
 import { prepareTags } from "src/utils/internal/intake/prepareTags";
 import { prepareUser } from "src/utils/internal/intake/prepareUser";
-import { sanitizeValue } from "src/utils/internal/privacy/sanitizeValue";
-
-const LEVELS = {
-  fatal: true,
-  error: true,
-  warning: true,
-  info: true,
-} satisfies Record<FlareLevel, true>;
-
-const isLevel = (value: unknown): value is FlareLevel =>
-  typeof value === "string" && Object.hasOwn(LEVELS, value);
+import { sanitizeString } from "src/utils/internal/privacy/sanitizeString";
 
 const prepareOperation = (
-  operation: unknown,
+  operation: string | null,
   policy: PrivacyPolicy,
   losses: MappingLoss[],
 ) => {
@@ -35,12 +24,19 @@ const prepareOperation = (
     return null;
   }
 
-  const sanitized = sanitizeValue(operation, "operation", policy);
-
-  losses.push(...sanitized.losses);
-
-  return typeof sanitized.value === "string" ? sanitized.value : null;
+  return sanitizeString(operation, {
+    path: "operation",
+    maxLength: policy.limits.stringLength,
+    scrub: policy.scrub,
+    losses,
+  });
 };
+
+const isFlareLevel = (level: unknown): level is FlareLevel =>
+  level === "fatal" ||
+  level === "error" ||
+  level === "warning" ||
+  level === "info";
 
 /** Prepares one metadata layer. Invalid fields cost only themselves; a failing scrubber rejects the layer. */
 export const prepareReportLayer = <TSchema extends FlareSchema>(
@@ -52,14 +48,14 @@ export const prepareReportLayer = <TSchema extends FlareSchema>(
   const losses: MappingLoss[] = [];
   const layer: ReportLayer = {};
 
-  if (isRecord(tags)) {
+  if (tags !== undefined) {
     const prepared = prepareTags(tags, schema.tags, policy);
 
     layer.tags = prepared.value;
     losses.push(...prepared.losses);
   }
 
-  if (isRecord(contexts)) {
+  if (contexts !== undefined) {
     const prepared = prepareContexts(contexts, schema.contexts, policy);
 
     layer.contexts = prepared.value;
@@ -77,14 +73,12 @@ export const prepareReportLayer = <TSchema extends FlareSchema>(
     layer.operation = prepareOperation(operation, policy, losses);
   }
 
-  if (level !== undefined && !isLevel(level)) {
-    losses.push({ path: "level", reason: "invalid" });
-
-    return { layer, losses };
+  if (level !== undefined && isFlareLevel(level)) {
+    layer.level = level;
   }
 
-  if (level !== undefined) {
-    layer.level = level;
+  if (level !== undefined && !isFlareLevel(level)) {
+    losses.push({ path: "level", reason: "invalid" });
   }
 
   return { layer, losses };

@@ -13,7 +13,7 @@ export const prepareTags = (
   declared: FlareSchema["tags"],
   policy: PrivacyPolicy,
 ): { value: Record<string, TagValue>; losses: MappingLoss[] } => {
-  const accepted: Record<string, TagValue> = Object.create(null);
+  const accepted: Array<[string, TagValue]> = [];
   const losses: MappingLoss[] = [];
 
   for (const [key, raw] of Object.entries(tags)) {
@@ -24,22 +24,22 @@ export const prepareTags = (
       continue;
     }
 
-    accepted[key] = validation.value;
+    accepted.push([key, validation.value]);
   }
 
-  const sanitized = sanitizeValue(accepted, "tags", policy);
-  const value: Record<string, TagValue> = Object.create(null);
+  const sanitized = sanitizeValue(Object.fromEntries(accepted), "tags", policy);
+  const value: Array<[string, TagValue]> = [];
 
   if (isRecord(sanitized.value)) {
     for (const [key, tag] of Object.entries(sanitized.value)) {
       if (isTagValue(tag)) {
-        value[key] = tag;
+        value.push([key, tag]);
       }
     }
   }
 
   return {
-    value: Object.freeze(value),
+    value: Object.freeze(Object.fromEntries(value)),
     losses: [...losses, ...sanitized.losses],
   };
 };

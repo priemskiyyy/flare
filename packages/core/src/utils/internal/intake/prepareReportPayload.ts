@@ -3,7 +3,7 @@ import type { PrivacyPolicy } from "src/types/internal/PrivacyPolicy";
 import type { ReportPayload } from "src/types/internal/ReportPayload";
 import type { ReportSource } from "src/types/internal/ReportSource";
 import { assertUnreachable } from "src/utils/common/assertUnreachable";
-import { sanitizeValue } from "src/utils/internal/privacy/sanitizeValue";
+import { sanitizeString } from "src/utils/internal/privacy/sanitizeString";
 import { normalizeException } from "src/utils/internal/report/normalizeException";
 
 /** Normalizes a thrown value or message into the sanitized subject of a report. */
@@ -34,18 +34,14 @@ export const prepareReportPayload = (
     };
   }
 
-  const { limits } = policy;
+  const losses: MappingLoss[] = [];
 
-  const sanitized = sanitizeValue(source.text, "message", {
-    ...policy,
-    limits: { ...limits, stringLength: limits.messageLength },
+  const message = sanitizeString(source.text, {
+    path: "message",
+    maxLength: policy.limits.messageLength,
+    scrub: policy.scrub,
+    losses,
   });
 
-  return {
-    payload: {
-      kind: "message",
-      message: typeof sanitized.value === "string" ? sanitized.value : "",
-    },
-    losses: sanitized.losses,
-  };
+  return { payload: { kind: "message", message }, losses };
 };
