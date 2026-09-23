@@ -24,7 +24,7 @@ The page walks through five sections, each with a "Try this" hint:
 
 ## How it fits together
 
-The domain lives in `examples/shared`, the `example-shared` workspace package. This folder is the React page over it.
+The domain lives in [`examples/shared`](../README.md#shared-code), which the Vue, Solid and Svelte examples use too. This folder is the React page over it.
 
 | File                                                | Role                                                                                                  |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |

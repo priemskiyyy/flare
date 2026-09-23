@@ -9,7 +9,7 @@ Use Node 22.18 or newer and the pnpm version in `package.json`. Run `pnpm instal
 - `packages/react`, `packages/vue`, `packages/solid`, `packages/svelte`: the bindings. Each has the same surface, a provider, `useFlare`, `useFlareStatus`, `useDestinationStatus` and `FlareErrorBoundary`, in its framework's own idiom.
 - `packages/devtools`: the in-page inspector, a Solid application that Vite bundles together with its runtime, and one thin wrapper per binding.
 - `packages/trace`: the Trace breadcrumb bridge.
-- `examples/react`: Ledger, a runnable application, tested through its buttons as the `example-react` vitest project, and in Chromium by `pnpm test:examples`, which is not part of `pnpm check`.
+- `examples/`: Ledger, one runnable application in React, Vue, Solid, Svelte and Expo, over the domain in `examples/shared` and, for Expo, the fixture API in `examples/server`. The web examples are tested through their buttons as their `example-<name>` vitest projects, and in Chromium by `pnpm test:examples`, which is not part of `pnpm check`. The Expo app is typechecked and bundled, not run. `examples/README.md` lists them.
 - `docs/`: the VitePress site. The sidebar in `docs/.vitepress/config.ts` is the one list of pages.
 - `scripts/`: the release gates. Each has been probed with a deliberately broken input, so keep that habit when changing one.
 - `docs/internals/architecture.md`: the owners, the path of a report, the principles, and the test that guards each invariant.

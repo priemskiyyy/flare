@@ -1,5 +1,5 @@
 ---
-description: "Ledger, an invoicing app for two companies, shows where each Flare error report goes: five destinations, redaction, receipts, a fault lab and the diagnostics timeline, all inside the page."
+description: "Ledger, an invoicing app for two companies, shows where each Flare error report goes: five destinations, redaction, receipts, a fault lab and the diagnostics timeline in React, and the same app in Vue, Solid, Svelte and Expo."
 ---
 
 <script setup>
@@ -43,14 +43,37 @@ The page walks through five sections, each with a "Try this" hint:
 `examples/shared/ledger/reporting/createLedgerFlare.ts` holds all of Ledger's reporting, with its schema and privacy rules beside it in `constants/`:
 
 - a [`defaults.to`](routing.md) function that sends reports tagged `area: "billing"` to your API, Sentry and the console, and everything else elsewhere
-- a Zod [schema](metadata.md#typing-them) for its tags, contexts and breadcrumbs, including the `react` context the error boundary adds
+- a Zod [schema](metadata.md#typing-them) for its tags, contexts and breadcrumbs, including the `react` and `vue` contexts those error boundaries add
 - [`redact`](privacy.md) that keeps the defaults and adds the IBAN, and a `scrub` that replaces email addresses
 - a `timeout` of 3000 ms, short enough for the lab's slow API to end unconfirmed
 
 To use a real provider, swap a simulated SDK for the one your application initializes, such as `sentry({ sdk: Sentry })` after `Sentry.init`, and give the HTTP adapter a `request` over your own API client. Nothing else in the app changes. The [example's README](https://github.com/priemskiyyy/flare/tree/main/examples/react#readme) maps each part of the page to its source.
 
+## Vue, Solid, Svelte and Expo
+
+The same Ledger runs on every binding, over the same shared domain:
+
+```sh
+pnpm --filter example-vue dev
+pnpm --filter example-solid dev
+pnpm --filter example-svelte dev
+```
+
+Each web version is the app and its latest report: `FlareProvider`, `FlareErrorBoundary` around the preview, `useFlareStatus` in the header, `useDestinationStatus` beside each destination's answer, and the devtools through the binding's wrapper. The receipts, the lab and the timeline are the React page's alone.
+
+The Expo app is Ledger on React Native. Its reports leave the app: your API is a fixture server on your computer, reached over HTTP, with the console beside it. Start the server, then the app:
+
+```sh
+pnpm dev:server
+pnpm --filter example-expo dev
+```
+
+The app flushes when it goes to the background, and the server can be taken offline or slowed down while the app runs, as [its README](https://github.com/priemskiyyy/flare/tree/main/examples/expo#readme) shows. The [examples README](https://github.com/priemskiyyy/flare/tree/main/examples#readme) lists every example.
+
 ## Tests
 
 `pnpm test:unit` runs the example's tests in jsdom with the rest of the workspace. They start Ledger the way the page does and drive the flows through the buttons, with a fresh backend and runtime per test: routing, including a destination it leaves out, redaction and the payload's highlights, skipped messages, the error boundary, a stale scope, an offline or slow API, account isolation, the startup buffer, dedupe and the timeline's wording.
 
-`pnpm test:examples` builds the packages and drives the built page in Chromium with Playwright (`examples/ledger.spec.ts`). At 375 and 1280 px wide, a payment settles with no page errors and no horizontal scroll, reaching your API and leaving PostHog out. It also checks that the payload shows the card token and the IBAN as `[Redacted]` and marks both, that an upload outliving an account switch is dropped as `stale-scope`, that **Reset demo** starts over signed in as Ada, and that the devtools open and list all five destinations. It is not part of `pnpm check`.
+`pnpm test:examples` builds the packages and drives the built page in Chromium with Playwright (`examples/ledger.spec.ts`). At 375 and 1280 px wide, a payment settles with no page errors and no horizontal scroll, reaching your API and leaving PostHog out. It also checks that the payload shows the card token and the IBAN as `[Redacted]` and marks both, that an upload outliving an account switch is dropped as `stale-scope`, that **Reset demo** starts over signed in as Ada, and that the devtools open and list all five destinations. `examples/frameworks.spec.ts` drives the Vue, Solid and Svelte builds the same way: a payment routed away from PostHog, a broken preview reported by the boundary, a `stale-scope` upload, a phone width without horizontal scroll, and the devtools. Neither is part of `pnpm check`.
+
+The Vue, Solid and Svelte examples have their own jsdom tests in `pnpm test:unit`, and so does the fixture server. The Expo app is typechecked and bundled for web, iOS and Android, and has not run on a device.

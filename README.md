@@ -80,7 +80,7 @@ Every package is ESM only, side-effect free and typed. The core has no dependenc
 - [Testing](docs/testing.md), [devtools](docs/devtools.md), [troubleshooting](docs/troubleshooting.md)
 - [Writing an adapter](docs/writing-an-adapter.md) and the [architecture](docs/internals/architecture.md)
 
-[Ledger](docs/examples.md), a runnable React example, shows where each report goes and needs no provider account.
+[Ledger](docs/examples.md), a runnable example in React, Vue, Solid, Svelte and Expo, shows where each report goes and needs no provider account.
 
 ## Status
 
