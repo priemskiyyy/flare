@@ -12,7 +12,7 @@ import type { SubmissionEvidence } from "src/types/SubmissionEvidence";
  * - `skipped`: Flare never attempted this destination.
  * - `failed`: an attempt was made and definitely failed.
  * - `indeterminate`: an attempt was made and its outcome cannot be known. A
- *   deadline is this, never `failed`: the report may still have been sent.
+ *   timeout is this, never `failed`: the report may still have been sent.
  *   So is disposal while a submission is in flight.
  *
  * @example
@@ -50,5 +50,5 @@ export type DestinationOutcome =
   | { readonly status: "failed"; readonly error: unknown }
   | {
       readonly status: "indeterminate";
-      readonly reason: "deadline" | "ambiguous" | "disposed";
+      readonly reason: "timeout" | "ambiguous" | "disposed";
     };

@@ -7,10 +7,10 @@ import type { DestinationFlushResult } from "src/types/DestinationFlushResult";
  *
  * @example
  * ```ts
- * const { drained, destinations } = await flare.flush({ timeoutMs: 1500 });
+ * const { drained, destinations } = await flare.flush({ timeout: 1500 });
  * ```
  */
 export type FlareFlushResult<TName extends string = string> = {
   drained: boolean;
-  destinations: Partial<Record<TName, DestinationFlushResult>>;
+  destinations: Record<TName, DestinationFlushResult>;
 };
