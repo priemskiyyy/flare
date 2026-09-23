@@ -1,0 +1,60 @@
+{
+  "name": "@priemskiyyy/flare-datadog",
+  "version": "0.1.0",
+  "description": "Datadog RUM destination for flare in the browser: each exception is one RUM error carrying the report's own attributes under context.flare, sent only while RUM attaches the report's user, over the datadogRum you inject.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/priemskiyyy/flare.git",
+    "directory": "packages/adapters/datadog"
+  },
+  "bugs": {
+    "url": "https://github.com/priemskiyyy/flare/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "lint:typescript": "tsc --noEmit -p .",
+    "lint:eslint": "eslint src",
+    "test:unit": "vitest run --root ../../.. --project datadog"
+  },
+  "peerDependencies": {
+    "@priemskiyyy/flare": ">=0.1.0 <0.2",
+    "@datadog/browser-rum": ">=7.0.0 <8"
+  },
+  "peerDependenciesMeta": {
+    "@datadog/browser-rum": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@priemskiyyy/flare": "workspace:*"
+  },
+  "keywords": [
+    "datadog",
+    "rum",
+    "error-tracking",
+    "error-reporting",
+    "typescript",
+    "flare",
+    "adapter"
+  ],
+  "homepage": "https://priemskiyyy.github.io/flare/"
+}
