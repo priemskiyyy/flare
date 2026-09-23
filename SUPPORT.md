@@ -6,9 +6,9 @@ For a bug report, include:
 
 - The smallest example that reproduces the issue, ideally over the mock adapter from `@priemskiyyy/flare/mock`.
 - Flare, adapter, provider SDK, framework and runtime versions, and the platform: browser, Node, React Native or Expo.
-- The Flare options involved: the destinations, `default` or `route`, and any `schema`, `privacy`, `buffer`, `dedupe` or `limits`.
+- The Flare options involved: the destinations, `defaults`, and any `schema`, `privacy`, `buffer`, `timeout`, `dedupe` or `rateLimits`.
 - The receipt of the report in question, from `await receipt.settled`, including each destination's outcome, evidence and losses.
-- Each destination's status and capabilities, from `flare.destination(name)`.
+- Each destination's status, from `flare.destination(name).status.get()`, and the `code` of a `FlareError` it holds.
 - The devtools timeline for the report, if the application mounts them.
 - Whether it happens before `start()`, across a sign-in or sign-out, during `flush()` or after `dispose()`.
 
