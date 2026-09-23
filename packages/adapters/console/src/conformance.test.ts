@@ -1,8 +1,8 @@
 import { testReporterAdapter } from "@priemskiyyy/flare/testing";
 
-import { consoleReporter } from "src/consoleReporter";
+import { console } from "src/console";
 
 testReporterAdapter({
   name: "console",
-  createAdapter: () => consoleReporter({ writer: () => {} }),
+  createAdapter: () => console({ writer: () => {} }),
 });
