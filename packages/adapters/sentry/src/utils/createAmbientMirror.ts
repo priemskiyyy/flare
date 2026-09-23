@@ -3,12 +3,12 @@ import type {
   AmbientSnapshot,
 } from "@priemskiyyy/flare";
 
+import type { SentryAdapterOptions } from "src/types/SentryAdapterOptions";
 import type { SentryLike } from "src/types/SentryLike";
-import type { SentryReporterOptions } from "src/types/SentryReporterOptions";
-import { toSentryBreadcrumb } from "src/utils/toSentryBreadcrumb";
-import { toSentryUser } from "src/utils/toSentryUser";
+import { getSentryBreadcrumb } from "src/utils/getSentryBreadcrumb";
+import { getSentryUser } from "src/utils/getSentryUser";
 
-type Parts = NonNullable<SentryReporterOptions<SentryLike>["ambient"]>;
+type Parts = NonNullable<SentryAdapterOptions<SentryLike>["ambient"]>;
 
 /**
  * Mirrors the parts of Flare's session that were asked for into Sentry's
@@ -52,46 +52,40 @@ export const createAmbientMirror = (sdk: SentryLike, parts: Parts) => {
     }
   };
 
-  const session = (snapshot: AmbientSnapshot) => {
-    if (parts.user === true) {
-      sdk.setUser(toSentryUser(snapshot.user));
-    }
+  const ambient: AmbientReporterContext = {
+    session: (snapshot) => {
+      if (parts.user === true) {
+        sdk.setUser(getSentryUser(snapshot.user));
+      }
 
-    if (parts.tags === true) {
-      mirrorTags(snapshot.tags);
-    }
+      if (parts.tags === true) {
+        mirrorTags(snapshot.tags);
+      }
 
-    if (parts.contexts === true) {
-      mirrorContexts(snapshot.contexts);
-    }
+      if (parts.contexts === true) {
+        mirrorContexts(snapshot.contexts);
+      }
 
-    const changedAccount =
-      generation !== null && generation !== snapshot.generation;
+      const changedAccount =
+        generation !== null && generation !== snapshot.generation;
 
-    generation = snapshot.generation;
+      generation = snapshot.generation;
 
-    if (parts.breadcrumbs === true && changedAccount) {
-      sdk.getIsolationScope().clearBreadcrumbs();
-    }
+      if (parts.breadcrumbs === true && changedAccount) {
+        sdk.getIsolationScope().clearBreadcrumbs();
+      }
+    },
+    breadcrumb: (breadcrumb) => {
+      if (parts.breadcrumbs !== true) {
+        return;
+      }
+
+      sdk.addBreadcrumb(getSentryBreadcrumb(breadcrumb));
+    },
   };
 
-  const enabled = Object.values(parts).includes(true);
-
-  const context: AmbientReporterContext | undefined = !enabled
-    ? undefined
-    : {
-        session,
-        ...(parts.breadcrumbs !== true
-          ? {}
-          : {
-              breadcrumb: (breadcrumb) => {
-                sdk.addBreadcrumb(toSentryBreadcrumb(breadcrumb));
-              },
-            }),
-      };
-
   return {
-    context,
+    ambient,
     /**
      * The fields Flare must remove after Sentry composes its scopes. They
      * describe the current account, which may differ from the report's.
@@ -103,8 +97,13 @@ export const createAmbientMirror = (sdk: SentryLike, parts: Parts) => {
         sdk.setUser(null);
       }
 
-      mirrorTags({});
-      mirrorContexts({});
+      if (parts.tags === true) {
+        mirrorTags({});
+      }
+
+      if (parts.contexts === true) {
+        mirrorContexts({});
+      }
     },
   };
 };
