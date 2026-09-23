@@ -16,14 +16,17 @@ import { expect, test } from "vitest";
 test("a failed save is reported with its area", async () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { mock: mock.adapter } });
+
   flare.start();
 
   const receipt = flare.capture(new Error("Save failed"), {
     tags: { area: "editor", apiToken: "secret" },
   });
+
   await receipt.settled;
 
   const report = mock.submissions[0]?.report;
+
   expect(report?.tags).toEqual({ area: "editor", apiToken: "[Redacted]" });
 });
 ```
@@ -42,14 +45,17 @@ import { expect, test } from "vitest";
 test("a provider failure is an outcome, not an exception", async () => {
   const mock = createMockAdapter({ hold: true });
   const flare = new Flare({ destinations: { mock: mock.adapter } });
+
   flare.start();
 
   const receipt = flare.capture(new Error("boom"));
+
   expect(receipt.status.get().state).toBe("pending");
 
   mock.submissions[0]?.fail(new Error("network down"));
 
   const status = await receipt.settled;
+
   expect(status).toMatchObject({
     state: "settled",
     outcomes: { mock: { status: "failed" } },
@@ -57,22 +63,19 @@ test("a provider failure is an outcome, not an exception", async () => {
 });
 ```
 
-| Option         | What it simulates                                                       |
-| -------------- | ----------------------------------------------------------------------- |
-| `hold`         | `submit` waits until the test calls `settle()` or `fail()`.             |
-| `holdOpen`     | `open` waits, for reports captured while a destination is starting.     |
-| `available`    | A provider that is not available in this environment.                   |
-| `flush`        | A session with a flush, or with `"hold"`, one the test answers.         |
-| `ambient`      | A session with an ambient integration, recorded on `sessions`.          |
-| `capabilities` | Capabilities to declare, such as `messages: false`.                     |
-| `onOpen`       | Runs inside `open`. Throw to stand for an SDK that fails to initialize. |
-| `onSubmit`     | Runs inside `submit`. Throw, or return a result to answer at once.      |
+| Option     | What it simulates                                                       |
+| ---------- | ----------------------------------------------------------------------- |
+| `hold`     | `submit` waits until the test calls `settle()` or `fail()`.             |
+| `flush`    | A session with a flush, or with `"hold"`, one the test answers.         |
+| `ambient`  | A session with an ambient integration, recorded on `sessions`.          |
+| `onOpen`   | Runs inside `open`. Throw to stand for an SDK that fails to initialize. |
+| `onSubmit` | Runs inside `submit`. Throw, or return a result to answer at once.      |
 
 Time is injectable too. Pass `now` to the Flare and use your test runner's fake timers for buffers, deadlines and the dedupe window.
 
 ## Dispose between tests
 
-A Flare that is not disposed keeps its timers and its claim on a singleton SDK:
+A Flare that is not disposed keeps its timers and what its adapters mirrored into provider SDKs:
 
 ```ts
 import { Flare } from "@priemskiyyy/flare";
