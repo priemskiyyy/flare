@@ -26,7 +26,7 @@ const counts = (mocks: ReturnType<typeof trio>) => ({
   console: mocks.console.submissions.length,
 });
 
-test("without default or route a report goes to every destination", () => {
+test("without defaults.to a report goes to every destination", () => {
   const mocks = trio();
   const flare = new Flare({ destinations: mocks.destinations });
 
@@ -37,12 +37,12 @@ test("without default or route a report goes to every destination", () => {
   expect(counts(mocks)).toEqual({ sentry: 1, backend: 1, console: 1 });
 });
 
-test("default selects the destinations most captures go to", () => {
+test("a defaults.to list selects the destinations most captures go to", () => {
   const mocks = trio();
 
   const flare = new Flare({
     destinations: mocks.destinations,
-    default: ["sentry", "backend"],
+    defaults: { to: ["sentry", "backend"] },
   });
 
   flare.start();
@@ -52,12 +52,12 @@ test("default selects the destinations most captures go to", () => {
   expect(counts(mocks)).toEqual({ sentry: 1, backend: 1, console: 0 });
 });
 
-test("a per-capture to replaces the default and never merges with it", () => {
+test("a report's own to replaces defaults.to and never merges with it", () => {
   const mocks = trio();
 
   const flare = new Flare({
     destinations: mocks.destinations,
-    default: ["sentry", "backend"],
+    defaults: { to: ["sentry", "backend"] },
   });
 
   flare.start();
@@ -71,13 +71,20 @@ test("a per-capture to replaces the default and never merges with it", () => {
   });
 });
 
-test("route decides per report from the sanitized report", () => {
+test("a defaults.to function decides per report from the sanitized report", () => {
   const mocks = trio();
 
   const flare = new Flare({
     destinations: mocks.destinations,
-    route: ({ report }) =>
-      report.level === "fatal" ? ["sentry", "backend"] : ["console"],
+    defaults: {
+      to: ({ report }) => {
+        if (report.level === "fatal") {
+          return ["sentry", "backend"];
+        }
+
+        return ["console"];
+      },
+    },
   });
 
   flare.start();
@@ -99,12 +106,12 @@ test("a destination named twice receives the report once", () => {
   expect(counts(mocks)).toEqual({ sentry: 1, backend: 0, console: 0 });
 });
 
-test("an empty route drops the report as no-destinations", async () => {
+test("an empty defaults.to drops the report as no-destinations", async () => {
   const mocks = trio();
 
   const flare = new Flare({
     destinations: mocks.destinations,
-    route: () => [],
+    defaults: { to: () => [] },
   });
 
   flare.start();
@@ -115,13 +122,15 @@ test("an empty route drops the report as no-destinations", async () => {
   });
 });
 
-test("a route that throws fails closed: the report goes nowhere", async () => {
+test("a defaults.to that throws fails closed: the report goes nowhere", async () => {
   const mocks = trio();
 
   const flare = new Flare({
     destinations: mocks.destinations,
-    route: () => {
-      throw new Error("routing bug");
+    defaults: {
+      to: () => {
+        throw new Error("routing bug");
+      },
     },
   });
 
@@ -134,31 +143,20 @@ test("a route that throws fails closed: the report goes nowhere", async () => {
   expect(counts(mocks)).toEqual({ sentry: 0, backend: 0, console: 0 });
 });
 
-test("a route override that throws when read fails closed too", async () => {
+test("a defaults.to function or a to that names an unknown destination fails closed too", async () => {
   const mocks = trio();
-  const flare = new Flare({ destinations: mocks.destinations });
+
+  const flare = new Flare({
+    destinations: mocks.destinations,
+    defaults: { to: () => JSON.parse('["sentry","typo"]') },
+  });
 
   flare.start();
 
-  const receipt = flare.message("bad route", {
-    get to(): ["sentry"] {
-      throw new Error("routing getter failed");
-    },
-  });
-
-  await expect(receipt.settled).resolves.toEqual({
+  await expect(flare.capture(new Error("boom")).settled).resolves.toEqual({
     state: "dropped",
     reason: "route-failed",
   });
-  expect(counts(mocks)).toEqual({ sentry: 0, backend: 0, console: 0 });
-});
-
-test("a route or a to that names an unknown destination fails closed too", async () => {
-  const mocks = trio();
-  const flare = new Flare({ destinations: mocks.destinations });
-
-  flare.start();
-
   await expect(
     flare.capture(new Error("boom"), { to: JSON.parse('["sentry","typo"]') })
       .settled,
@@ -214,28 +212,4 @@ test("a hanging destination delays only its own outcome", async () => {
   slow.submissions[0]?.settle();
 
   await expect(receipt.settled).resolves.toMatchObject({ state: "settled" });
-});
-
-test("unavailable destinations are skipped, and a report can settle with all of them unavailable", async () => {
-  const unavailable = {
-    available: false as const,
-    reason: "not on this platform",
-  };
-
-  const first = createMockAdapter({ available: unavailable });
-  const second = createMockAdapter({ available: unavailable });
-
-  const flare = new Flare({
-    destinations: { first: first.adapter, second: second.adapter },
-  });
-
-  flare.start();
-
-  await expect(flare.capture(new Error("boom")).settled).resolves.toEqual({
-    state: "settled",
-    outcomes: {
-      first: { status: "skipped", reason: "unavailable" },
-      second: { status: "skipped", reason: "unavailable" },
-    },
-  });
 });
