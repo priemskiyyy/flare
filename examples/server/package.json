@@ -1,0 +1,15 @@
+{
+  "name": "example-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build && node dist/main.js",
+    "lint:typescript": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@priemskiyyy/flare": "workspace:*",
+    "example-shared": "workspace:*",
+    "zod": "4.1.12"
+  }
+}

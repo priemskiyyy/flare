@@ -7,7 +7,8 @@ import { wait } from "examples/shared/ledger/utils/wait";
 /**
  * Your API and the client that calls it, inside the page. The lab sets its
  * latency, takes it offline or fails the next request, and every request
- * lands in the network log.
+ * lands in the network log. `receive` is the API's side alone, which the
+ * fixture server answers real requests with.
  */
 export const createReportBackend = ({
   latency,
@@ -23,47 +24,58 @@ export const createReportBackend = ({
     nextId += 1;
   };
 
-  return {
-    request: async ({ report, signal }) => {
-      const startedAt = Date.now();
-      const account = report.identity.user?.id ?? null;
+  const receive: ReportBackend["receive"] = async ({
+    reportId,
+    account,
+    signal,
+  }) => {
+    const startedAt = Date.now();
 
-      try {
-        await wait(state.get().latency, signal);
-      } catch (error) {
-        record({
-          reportId: report.id,
-          account,
-          outcome: "aborted",
-          duration: Date.now() - startedAt,
-        });
-
-        throw error;
-      }
-
-      const current = state.get();
-
-      if (current.offline || current.failNext) {
-        state.set({ ...current, failNext: false });
-        record({
-          reportId: report.id,
-          account,
-          outcome: "failed",
-          duration: Date.now() - startedAt,
-        });
-
-        throw new Error("The report endpoint answered 503.");
-      }
-
+    try {
+      await wait(state.get().latency, signal);
+    } catch (error) {
       record({
-        reportId: report.id,
+        reportId,
         account,
-        outcome: "accepted",
+        outcome: "aborted",
         duration: Date.now() - startedAt,
       });
 
-      return { id: `evt_${report.id.slice(0, 8)}` };
-    },
+      throw error;
+    }
+
+    const current = state.get();
+
+    if (current.offline || current.failNext) {
+      state.set({ ...current, failNext: false });
+      record({
+        reportId,
+        account,
+        outcome: "failed",
+        duration: Date.now() - startedAt,
+      });
+
+      throw new Error("The report endpoint answered 503.");
+    }
+
+    record({
+      reportId,
+      account,
+      outcome: "accepted",
+      duration: Date.now() - startedAt,
+    });
+
+    return { id: `evt_${reportId.slice(0, 8)}` };
+  };
+
+  return {
+    request: ({ report, signal }) =>
+      receive({
+        reportId: report.id,
+        account: report.identity.user?.id ?? null,
+        signal,
+      }),
+    receive,
     requests: requests.log,
     state,
     setLatency: (next) => state.set({ ...state.get(), latency: next }),

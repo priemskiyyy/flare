@@ -17,6 +17,7 @@
     "check": "pnpm build && pnpm lint:typescript && pnpm lint:eslint && pnpm lint:prettier && pnpm test:unit",
     "test:package": "node scripts/verify-packages.mjs",
     "test:examples": "pnpm build && playwright test -c examples/playwright.config.ts",
+    "dev:server": "pnpm --filter example-server dev",
     "verify:release": "node scripts/verify-release.mjs",
     "dev:docs": "vitepress dev docs",
     "build:docs": "vitepress build docs",

@@ -119,6 +119,14 @@ const exampleProjects: TestProjectConfiguration[] = [
       environment: "jsdom",
     },
   },
+  {
+    extends: true,
+    resolve: { alias: exampleAliases("server") },
+    test: {
+      name: "example-server",
+      include: ["examples/server/src/**/*.test.ts"],
+    },
+  },
 ];
 
 // Every adapter is an ordinary node project named after its folder, so a new
