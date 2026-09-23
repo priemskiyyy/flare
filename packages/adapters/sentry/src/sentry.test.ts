@@ -15,6 +15,16 @@ const create = (
   return { fake, flare };
 };
 
+const capturedException = (fake: ReturnType<typeof fakeSentry>) => {
+  const event = fake.events[0];
+
+  if (event?.kind !== "exception") {
+    throw new Error("Expected Sentry to capture an exception.");
+  }
+
+  return event.exception;
+};
+
 const untouched = {
   user: null,
   level: null,
@@ -45,9 +55,8 @@ test("creating the adapter calls nothing on the SDK", () => {
   const fake = fakeSentry({ initialized: false });
 
   sentry({ sdk: fake.sdk });
-  sentry({ sdk: fake.sdk, ownership: "owned", init: fake.init });
 
-  expect(fake.calls).toEqual({ init: 0, close: 0, flush: [] });
+  expect(fake.calls).toEqual({ init: 0, flush: [] });
   expect(fake.events).toEqual([]);
 });
 
@@ -63,13 +72,11 @@ test("an exception reaches Sentry as an Error rebuilt from the sanitized report"
 
   const status = await flare.capture(thrown).settled;
 
-  const event = fake.events[0];
+  const exception = capturedException(fake);
 
-  expect(event?.kind === "exception" ? event.exception : null).toBeInstanceOf(
-    Error,
-  );
-  expect(event?.kind === "exception" ? event.exception : null).not.toBe(thrown);
-  expect(event?.kind === "exception" ? event.exception : null).toMatchObject({
+  expect(exception).toBeInstanceOf(Error);
+  expect(exception).not.toBe(thrown);
+  expect(exception).toMatchObject({
     name: "UploadError",
     message: "upload failed",
     stack: thrown.stack,
@@ -98,10 +105,7 @@ test("the cause chain is rebuilt so Sentry can link the errors", () => {
     }),
   );
 
-  const event = fake.events[0];
-  const top = event?.kind === "exception" ? event.exception : null;
-
-  expect(top).toMatchObject({
+  expect(capturedException(fake)).toMatchObject({
     message: "upload failed",
     cause: {
       message: "write failed",
@@ -117,9 +121,7 @@ test("a thrown value without a stack gets a header only, never frames that point
 
   flare.capture("string rejection");
 
-  const event = fake.events[0];
-
-  expect(event?.kind === "exception" ? event.exception : null).toMatchObject({
+  expect(capturedException(fake)).toMatchObject({
     name: "NonError",
     stack: "NonError: string rejection",
   });
@@ -313,17 +315,21 @@ test("metadata replaced by Flare's report id and aggregate errors is reported as
   });
 });
 
-test("a borrowed SDK that is not initialized fails to start, and a retry after the application initializes it succeeds", () => {
+test("an SDK that is not initialized yet fails the start, and a retry after the application initializes it succeeds", () => {
   const fake = fakeSentry({ initialized: false });
   const { flare } = create({}, fake);
+  const receipt = flare.message("captured before init");
 
   flare.start();
 
   expect(flare.destination("sentry").status.get()).toMatchObject({
     state: "failed",
-    error: new Error(
-      'Sentry is not initialized. Call Sentry.init before flare.start(), or pass ownership: "owned" with an init function.',
-    ),
+    error: expect.objectContaining({
+      name: "FlareError",
+      code: "NOT_INITIALIZED",
+      message:
+        "Sentry is not initialized. Call Sentry.init before flare.start().",
+    }),
   });
   expect(fake.calls.init).toBe(0);
 
@@ -331,66 +337,73 @@ test("a borrowed SDK that is not initialized fails to start, and a retry after t
   flare.start();
 
   expect(flare.destination("sentry").status.get()).toEqual({ state: "ready" });
-});
-
-test("a borrowed SDK is never initialized and never closed by Flare", () => {
-  const { fake, flare } = create();
-
-  flare.start();
-
-  flare.dispose();
-
-  expect(fake.calls).toMatchObject({ init: 0, close: 0 });
-  expect(fake.state.initialized).toBe(true);
-});
-
-test("an owned SDK is initialized when the destination opens and closed when it is disposed", async () => {
-  const fake = fakeSentry({ initialized: false });
-  const { flare } = create({ ownership: "owned", init: fake.init }, fake);
-
-  flare.start();
-
-  expect(fake.calls.init).toBe(1);
-  expect(flare.destination("sentry").status.get()).toEqual({ state: "ready" });
-
-  flare.dispose();
-  await Promise.resolve();
-
-  expect(fake.calls.close).toBe(1);
+  expect(receipt.status.get()).toMatchObject({
+    outcomes: { sentry: { status: "submitted" } },
+  });
 });
 
 test("flush waits for the SDK's queue and reports a timeout honestly", async () => {
-  const { fake, flare } = create();
+  const fake = fakeSentry();
+
+  // The SDK gets what is left of the timeout, so the clock stands still.
+  const flare = new Flare({
+    destinations: { sentry: sentry({ sdk: fake.sdk }) },
+    now: () => 0,
+  });
 
   flare.start();
 
-  await expect(flare.flush({ timeoutMs: 300 })).resolves.toEqual({
+  await expect(flare.flush({ timeout: 300 })).resolves.toEqual({
     drained: true,
     destinations: { sentry: { status: "flushed" } },
   });
 
   fake.state.flushAnswer = false;
 
-  await expect(flare.flush({ timeoutMs: 300 })).resolves.toEqual({
+  await expect(flare.flush({ timeout: 300 })).resolves.toEqual({
     drained: true,
     destinations: { sentry: { status: "timeout" } },
   });
   expect(fake.calls.flush).toEqual([300, 300]);
 });
 
-test("the capabilities say what the browser SDK can honestly do", () => {
-  const { fake } = create();
+test("in the browser, a capture that throws is a failed outcome carrying the SDK's own error", async () => {
+  const { fake, flare } = create();
 
-  expect(sentry({ sdk: fake.sdk }).capabilities).toEqual({
-    eventLocal: { user: true, tags: true, contexts: true, breadcrumbs: true },
-    messages: true,
-    evidence: "sdk-call-returned",
-    flush: "sdk-queue",
-    queue: "sdk-memory",
-    automaticCapture: "provider-owned",
-    instance: "singleton",
-    filtering: "provider-hooks",
+  flare.start();
+  fake.state.captureFailure = new Error("transport exploded");
+
+  await expect(flare.capture(new Error("boom")).settled).resolves.toEqual({
+    state: "settled",
+    outcomes: {
+      sentry: { status: "failed", error: fake.state.captureFailure },
+    },
   });
+});
+
+test("on React Native, whose withScope swallows what its callback throws, a capture that throws is failed and never submitted", async () => {
+  const { fake, flare } = create({}, fakeSentry({ platform: "react-native" }));
+
+  flare.start();
+  fake.state.captureFailure = new Error("native bridge exploded");
+
+  const status = await flare.message("lost inside the scope").settled;
+
+  expect(status).toEqual({
+    state: "settled",
+    outcomes: {
+      sentry: {
+        status: "failed",
+        error: expect.objectContaining({
+          name: "FlareError",
+          code: "SUBMISSION_FAILED",
+          message:
+            "Sentry React Native swallowed an error while capturing the report.",
+        }),
+      },
+    },
+  });
+  expect(fake.events).toEqual([]);
 });
 
 test("the native handle is the SDK the application injected", () => {
@@ -399,20 +412,4 @@ test("the native handle is the SDK the application injected", () => {
   flare.start();
 
   expect(flare.destination("sentry").native).toBe(fake.sdk);
-});
-
-test("the same SDK registered under two names is rejected before anything opens", () => {
-  const fake = fakeSentry();
-
-  expect(
-    () =>
-      new Flare({
-        destinations: {
-          first: sentry({ sdk: fake.sdk }),
-          second: sentry({ sdk: fake.sdk }),
-        },
-      }),
-  ).toThrow(
-    'Flare destinations "first" and "second" drive the same singleton SDK. Register it once.',
-  );
 });

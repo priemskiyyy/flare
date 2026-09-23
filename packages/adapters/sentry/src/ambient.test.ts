@@ -57,25 +57,6 @@ test("without the ambient option nothing is ever mirrored into Sentry's global s
   expect(fake.global).toEqual(untouched);
 });
 
-test("with no ambient part enabled the session has no ambient member at all", async () => {
-  const open = (ambient?: Parameters<typeof sentry>[0]["ambient"]) =>
-    sentry({
-      sdk: fakeSentry().sdk,
-      ...(ambient === undefined ? {} : { ambient }),
-    }).open({
-      destination: "sentry",
-    });
-
-  const bare = await open();
-  const off = await open({ user: false });
-  const on = await open({ user: true });
-
-  expect("ambient" in bare).toBe(false);
-  expect("ambient" in off).toBe(false);
-  expect(typeof on.ambient?.session).toBe("function");
-  expect("breadcrumb" in (on.ambient ?? {})).toBe(false);
-});
-
 test("only the parts that were asked for are mirrored", () => {
   const { fake, flare } = create({ user: true });
 
@@ -200,7 +181,7 @@ test("buffered reports carry the breadcrumbs captured before the mirror started"
   ]);
 });
 
-test("disposing a borrowed SDK removes what Flare mirrored and nothing else", () => {
+test("disposing removes what Flare mirrored and nothing else", () => {
   const { fake, flare } = create({ user: true, tags: true, contexts: true });
 
   fake.sdk.setTags({ release: "set by the application" });

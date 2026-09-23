@@ -30,13 +30,16 @@ const cloneScope = (scope: ScopeData): ScopeData => ({
 });
 
 /**
- * A synchronous SDK fixture for mapping and ownership tests. The installed
- * SDK integration test separately covers isolation/current scope composition.
- * `global` models the state available to provider-owned events.
+ * A synchronous SDK fixture for mapping tests. The installed SDK integration
+ * test separately covers isolation and current scope composition. `global`
+ * models the state available to provider-owned events. On `react-native`,
+ * `withScope` swallows what its callback throws and answers `undefined`, as
+ * `@sentry/react-native` does.
  */
 export const fakeSentry = ({
   initialized = true,
-}: { initialized?: boolean } = {}) => {
+  platform = "browser",
+}: { initialized?: boolean; platform?: "browser" | "react-native" } = {}) => {
   const global = emptyScope();
   const stack: ScopeData[] = [global];
 
@@ -47,29 +50,51 @@ export const fakeSentry = ({
 
   const events: CapturedEvent[] = [];
 
-  const calls: {
-    init: number;
-    close: number;
-    flush: Array<number | undefined>;
-  } = { init: 0, close: 0, flush: [] };
+  const calls: { init: number; flush: Array<number | undefined> } = {
+    init: 0,
+    flush: [],
+  };
 
-  const state = { initialized, flushAnswer: true };
+  const state: {
+    initialized: boolean;
+    flushAnswer: boolean;
+    /** Makes `captureException` and `captureMessage` throw. */
+    captureFailure: Error | null;
+  } = { initialized, flushAnswer: true, captureFailure: null };
+
+  const failIfAsked = () => {
+    if (state.captureFailure !== null) {
+      throw state.captureFailure;
+    }
+  };
 
   const current = () => stack[stack.length - 1] ?? global;
 
-  const captureScope = (): ScopeData => {
-    const scope = current();
-
-    let event: SentryEventLike = {
-      ...(scope.user === null ? {} : { user: scope.user }),
-      ...(scope.level === null ? {} : { level: scope.level }),
+  const toEvent = (scope: ScopeData) => {
+    const event: SentryEventLike = {
       tags: { ...scope.tags },
       contexts: { ...scope.contexts },
       breadcrumbs: [...scope.breadcrumbs],
-      ...(scope.transactionName === null
-        ? {}
-        : { transaction: scope.transactionName }),
     };
+
+    if (scope.user !== null) {
+      event.user = scope.user;
+    }
+
+    if (scope.level !== null) {
+      event.level = scope.level;
+    }
+
+    if (scope.transactionName !== null) {
+      event.transaction = scope.transactionName;
+    }
+
+    return event;
+  };
+
+  const captureScope = (): ScopeData => {
+    const scope = current();
+    let event = toEvent(scope);
 
     for (const processor of processors.get(scope) ?? []) {
       event = processor(event);
@@ -124,19 +149,28 @@ export const fakeSentry = ({
 
   const sdk = {
     ...writer(() => global),
-    withScope: (callback: (scope: ReturnType<typeof writer>) => void) => {
+    withScope: <TResult>(
+      callback: (scope: ReturnType<typeof writer>) => TResult,
+    ) => {
       const forked = cloneScope(current());
 
       processors.set(forked, [...(processors.get(current()) ?? [])]);
       stack.push(forked);
 
       try {
-        callback(writer(() => forked));
+        return callback(writer(() => forked));
+      } catch (error) {
+        if (platform === "react-native") {
+          return undefined;
+        }
+
+        throw error;
       } finally {
         stack.pop();
       }
     },
     captureException: (exception: unknown) => {
+      failIfAsked();
       events.push({
         kind: "exception",
         exception,
@@ -146,6 +180,7 @@ export const fakeSentry = ({
       return `evt_${events.length}`;
     },
     captureMessage: (message: string) => {
+      failIfAsked();
       events.push({ kind: "message", message, scope: captureScope() });
 
       return `evt_${events.length}`;
@@ -155,13 +190,13 @@ export const fakeSentry = ({
 
       return Promise.resolve(state.flushAnswer);
     },
-    close: () => {
-      calls.close += 1;
-      state.initialized = false;
+    getClient: () => {
+      if (!state.initialized) {
+        return undefined;
+      }
 
-      return Promise.resolve(true);
+      return { name: "fake client" };
     },
-    getClient: () => (state.initialized ? { name: "fake client" } : undefined),
     getIsolationScope: () => writer(() => global),
   };
 
