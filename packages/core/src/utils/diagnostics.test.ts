@@ -24,7 +24,7 @@ test("observing diagnostics is passive: it opens nothing and creates no report",
   flare.status.subscribe(() => {});
   flare.destination("primary").status.subscribe(() => {});
 
-  expect(mock.openings).toEqual([]);
+  expect(mock.sessions).toEqual([]);
   expect(mock.submissions).toEqual([]);
 });
 
@@ -46,7 +46,6 @@ test("the snapshot holds counts and statuses, never report content", () => {
         name: "primary",
         adapter: "mocked",
         status: { state: "idle" },
-        capabilities: mock.adapter.capabilities,
         buffered: 1,
         inFlight: 0,
       },
@@ -59,61 +58,6 @@ test("the snapshot holds counts and statuses, never report content", () => {
     buffered: 0,
     inFlight: 1,
   });
-});
-
-test.each(["destination", "diagnostics"])(
-  "%s observers cannot change the capabilities used for submission",
-  (view) => {
-    const mock = createMockAdapter();
-    const flare = new Flare({ destinations: { primary: mock.adapter } });
-
-    flare.start();
-
-    const capabilities =
-      view === "destination"
-        ? flare.destination("primary").capabilities
-        : flare.diagnostics.get().destinations[0]?.capabilities;
-
-    if (capabilities === undefined) {
-      throw new Error("The destination must expose its capabilities.");
-    }
-
-    Reflect.set(capabilities, "messages", false);
-    Reflect.set(capabilities.eventLocal, "contexts", false);
-
-    const receipt = flare.message("Request failed");
-
-    expect(receipt.status.get()).toMatchObject({
-      state: "settled",
-      outcomes: { primary: { status: "submitted" } },
-    });
-    expect(mock.submissions).toHaveLength(1);
-    expect(flare.destination("primary").capabilities.eventLocal.contexts).toBe(
-      true,
-    );
-    expect(mock.adapter.capabilities.messages).toBe(true);
-    flare.dispose();
-  },
-);
-
-test("destinations own their capability snapshot without freezing adapter configuration", () => {
-  const mock = createMockAdapter();
-  const original = mock.adapter.capabilities;
-  const flare = new Flare({ destinations: { primary: mock.adapter } });
-  const handle = flare.destination("primary");
-
-  expect(Reflect.set(original, "messages", false)).toBe(true);
-  expect(Reflect.set(original.eventLocal, "contexts", false)).toBe(true);
-  flare.start();
-  flare.message("Request failed");
-
-  expect(mock.submissions).toHaveLength(1);
-  expect(handle.capabilities.messages).toBe(true);
-  expect(handle.capabilities.eventLocal.contexts).toBe(true);
-  expect(flare.diagnostics.get().destinations[0]?.capabilities).toBe(
-    handle.capabilities,
-  );
-  flare.dispose();
 });
 
 test.each(["active", "disposed"])(
@@ -162,7 +106,6 @@ test("the timeline names what happened to a report from acceptance to outcome", 
 
   expect(events.map((event) => event.type)).toEqual([
     "started",
-    "destination starting",
     "destination ready",
     "identity changed",
     "report accepted",
@@ -206,6 +149,7 @@ test("pending receipts return to zero once reports settle", async () => {
 test("a diagnostic listener cannot change the destinations a receipt waits for", () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+  let refused = false;
 
   flare.diagnostics.events.subscribe((event) => {
     if (!isRecord(event.context)) {
@@ -214,14 +158,22 @@ test("a diagnostic listener cannot change the destinations a receipt waits for",
 
     const { destinations } = event.context;
 
-    if (event.type === "report accepted" && Array.isArray(destinations)) {
+    if (event.type !== "report accepted" || !Array.isArray(destinations)) {
+      return;
+    }
+
+    // Caught here: an error thrown by a listener is rethrown to the host.
+    try {
       destinations.push("unselected");
+    } catch {
+      refused = true;
     }
   });
   flare.start();
 
   const receipt = flare.message("Request failed");
 
+  expect(refused).toBe(true);
   expect(receipt.status.get()).toEqual({
     state: "settled",
     outcomes: {
@@ -239,7 +191,15 @@ test("a diagnostic listener cannot change the destinations a receipt waits for",
 test("every outcome a destination gives is announced, whichever path it took", async () => {
   vi.useFakeTimers();
 
-  const ready = createMockAdapter({ capabilities: { messages: false } });
+  const ready = createMockAdapter({
+    onSubmit: ({ report }) => {
+      if (report.kind === "message") {
+        return { status: "skipped", reason: "unsupported-report-kind" };
+      }
+
+      return undefined;
+    },
+  });
 
   const lossy = createMockAdapter({
     onSubmit: () => ({
@@ -258,19 +218,14 @@ test("every outcome a destination gives is announced, whichever path it took", a
 
   const hanging = createMockAdapter({ hold: true });
 
-  const unavailable = createMockAdapter({
-    available: { available: false, reason: "not on this platform" },
-  });
-
   const flare = new Flare({
     destinations: {
       ready: ready.adapter,
       lossy: lossy.adapter,
       failing: failing.adapter,
       hanging: hanging.adapter,
-      unavailable: unavailable.adapter,
     },
-    deadlineMs: 1_000,
+    timeout: 1_000,
   });
 
   const events: FlareDiagnosticEvent[] = [];
@@ -289,13 +244,12 @@ test("every outcome a destination gives is announced, whichever path it took", a
     ["ready", { status: "submitted", reason: null, losses: 0 }],
     ["lossy", { status: "submitted", reason: null, losses: 1 }],
     ["failing", { status: "failed", reason: null, losses: 0 }],
-    ["unavailable", { status: "skipped", reason: "unavailable", losses: 0 }],
     ["ready", { status: "dropped", reason: "deduped", losses: 0 }],
     [
       "ready",
       { status: "skipped", reason: "unsupported-report-kind", losses: 0 },
     ],
-    ["hanging", { status: "indeterminate", reason: "deadline", losses: 0 }],
+    ["hanging", { status: "indeterminate", reason: "timeout", losses: 0 }],
   ]);
 });
 
@@ -306,7 +260,7 @@ test("what happens to a buffered report is announced too: held, overflowed, expi
 
   const flare = new Flare({
     destinations: { primary: mock.adapter },
-    buffer: { maxReports: 1, maxAgeMs: 1_000 },
+    buffer: { capacity: 1, maxAge: 1_000 },
   });
 
   const events: FlareDiagnosticEvent[] = [];
@@ -370,7 +324,7 @@ test("an event never carries an error object or report content, only its shape",
   expect(JSON.stringify(flare.diagnostics.get())).not.toContain(secret);
 });
 
-test("a breadcrumb refused for belonging to a previous identity is announced", () => {
+test("a breadcrumb refused for belonging to a previous identity is announced, without its name", () => {
   let clock = 1_000;
   const mock = createMockAdapter();
 
@@ -391,6 +345,6 @@ test("a breadcrumb refused for belonging to a previous identity is announced", (
   expect(events.at(-1)).toMatchObject({
     source: "session",
     type: "breadcrumb stale",
-    context: { name: "ada-step" },
+    context: null,
   });
 });

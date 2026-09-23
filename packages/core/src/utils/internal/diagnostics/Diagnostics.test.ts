@@ -2,6 +2,7 @@ import { expect, test, vi } from "vitest";
 
 import type { FlareSnapshot } from "src/types/FlareSnapshot";
 import { Diagnostics } from "src/utils/internal/diagnostics/Diagnostics";
+import type { RecordedEvent } from "src/utils/internal/diagnostics/Diagnostics";
 
 const snapshotOf = (pendingReceipts: number): FlareSnapshot => ({
   status: { state: "started" },
@@ -19,12 +20,10 @@ const create = () => {
   return { diagnostics, read, now };
 };
 
-const event = {
-  source: "report" as const,
+const event: RecordedEvent = {
+  source: "report",
   type: "report accepted",
-  destination: null,
   report: "report-1",
-  context: null,
 };
 
 test("the snapshot is read lazily and kept until something changes", () => {
@@ -72,7 +71,9 @@ test("an event is assembled only while someone listens", () => {
   stop();
   diagnostics.record(event);
 
-  expect(listener.mock.calls).toEqual([[{ ...event, timestamp: 42 }]]);
+  expect(listener.mock.calls).toEqual([
+    [{ ...event, destination: null, context: null, timestamp: 42 }],
+  ]);
   expect(now).toHaveBeenCalledTimes(1);
 });
 

@@ -1,7 +1,8 @@
 import type { FlareDiagnosticEvent } from "src/types/FlareDiagnosticEvent";
 import type { FlareDiagnostics } from "src/types/FlareDiagnostics";
 import type { FlareSnapshot } from "src/types/FlareSnapshot";
-import { isolate } from "src/utils/common/errors";
+import { copyFrozen } from "src/utils/common/copyFrozen";
+import { isolate } from "src/utils/common/isolate";
 
 type State =
   | {
@@ -11,7 +12,14 @@ type State =
     }
   | { state: "DISPOSED"; snapshot: FlareSnapshot };
 
-type RecordedEvent = Omit<FlareDiagnosticEvent, "timestamp">;
+/** What an owner records. What it leaves out is `null` on the published event. */
+export type RecordedEvent = {
+  source: FlareDiagnosticEvent["source"];
+  type: string;
+  destination?: string | undefined;
+  report?: string | undefined;
+  context?: unknown;
+};
 
 /** Lazy snapshots and microtask-batched notifications, closed after the final disposal event. */
 export class Diagnostics {
@@ -54,7 +62,7 @@ export class Diagnostics {
       };
     },
     events: {
-      subscribe: (listener) => {
+      subscribe: (listener: (event: FlareDiagnosticEvent) => void) => {
         if (this.#state.state === "DISPOSED") {
           return () => {};
         }
@@ -102,13 +110,7 @@ export class Diagnostics {
     }
 
     this.#state = { state: "DISPOSED", snapshot: this.#state.read() };
-    this.#emit({
-      source: "runtime",
-      type: "disposed",
-      destination: null,
-      report: null,
-      context: null,
-    });
+    this.#emit({ source: "runtime", type: "disposed" });
     this.#notify();
     this.#listeners.clear();
     this.#eventListeners.clear();
@@ -124,19 +126,28 @@ export class Diagnostics {
     }
   }
 
-  #emit(event: RecordedEvent) {
+  // Events are only assembled while someone listens.
+  #emit(recorded: RecordedEvent) {
     if (this.#eventListeners.size === 0) {
       return;
     }
 
-    const full: FlareDiagnosticEvent = { ...event, timestamp: this.#now() };
+    // Every listener receives the same event, so none can change it for the next.
+    const event: FlareDiagnosticEvent = Object.freeze({
+      source: recorded.source,
+      type: recorded.type,
+      destination: recorded.destination ?? null,
+      report: recorded.report ?? null,
+      timestamp: this.#now(),
+      context: copyFrozen(recorded.context ?? null),
+    });
 
     for (const listener of [...this.#eventListeners]) {
       if (!this.#eventListeners.has(listener)) {
         continue;
       }
 
-      isolate(() => listener(full));
+      isolate(() => listener(event));
     }
   }
 }
