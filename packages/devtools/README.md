@@ -1,6 +1,6 @@
 # @priemskiyyy/flare-devtools
 
-An in-page inspector for [Flare](../core). It shows where each destination stands and what it can honestly do, how many reports are buffered or in flight, and a searchable timeline of what happened to every report.
+An in-page inspector for [Flare](../core). It shows where each destination stands, how many reports are buffered or in flight, and a searchable timeline of what happened to every report.
 
 It reads `flare.diagnostics` and nothing else. It never starts Flare, opens a destination or creates a report, and it shows no report content, because the diagnostics hold none.
 
@@ -43,6 +43,7 @@ Anywhere else:
 import { FlareDevtools } from "@priemskiyyy/flare-devtools";
 
 const devtools = new FlareDevtools({ flare });
+
 devtools.mount(document.body.appendChild(document.createElement("div")));
 ```
 
@@ -62,10 +63,10 @@ The class also has `unmount()`, `setFlare(flare)` and `setMaxEvents(count)`. Mou
 
 - **Launcher**: a small pill with a status dot. The dot turns red when something failed while the panel was closed, and clears once you have looked.
 - **Header**: whether Flare is `idle`, `started` or `disposed`, then the identity generation, the number of session breadcrumbs and the receipts still pending. The panel docks to the bottom or to the right and resizes by dragging its edge or with the arrow keys. Its size, dock and open state are remembered.
-- **Destinations**: each one with its adapter, its status, and what it has buffered and in flight. Select one to see what it declared, which is which fields are event-local, whether messages are carried, the strongest evidence, the flush boundary, the queue, automatic capture, whether it is a singleton, and whether provider hooks can still drop a report. Selecting one also narrows the timeline to it, and to the events that belong to no destination, since a dropped report is often why a destination saw nothing.
+- **Destinations**: each one with its adapter, its status, and what it has buffered and in flight. Selecting one narrows the timeline to it, and to the events that belong to no destination, since a dropped report is often why a destination saw nothing.
 - **Timeline**: every diagnostic event, newest first, with its time, type, destination, a short report id and a one-line summary. A row expands to its full context, which can be copied. Search matches any of those. The kind chips narrow to errors, reports, destinations, session or runtime, each with a live count. Pause stops recording and Clear empties the timeline. Neither touches Flare.
 
-Anything that did not verifiably arrive counts as an error: a dropped report, a reached rate limit, a refused session change, a destination that is unavailable or failed, and every outcome other than `submitted`.
+Anything that did not verifiably arrive counts as an error: a dropped report, a reached rate limit, a refused session change, a destination whose start failed, and every outcome other than `submitted`.
 
 Recording runs while the inspector is mounted, also when the panel is collapsed.
 
@@ -80,13 +81,13 @@ The launcher and every control are native buttons with a visible focus ring. The
 ## Diagnose a missing report
 
 1. Press the Errors chip. A `report dropped` row names its reason: `stale-scope`, `rate-limited`, `reentrant`, `sanitizer-failed`, `route-failed`, `no-destinations` or `disposed`.
-2. If the report was accepted, expand `report accepted` and check that the destination you expected is in its `destinations`. If not, it is a routing question: `default`, `route` or the capture's `to`.
-3. Select that destination and find its `destination outcome`. `skipped` and `dropped` name their reason. `indeterminate` with `deadline` means the provider took too long, which does not prove the report was lost.
-4. If the outcome is `submitted`, Flare handed the report over. The destination's detail says what its evidence proves and whether provider hooks can still drop it. Then look in the provider's own tools.
+2. If the report was accepted, expand `report accepted` and check that the destination you expected is in its `destinations`. If not, it is a routing question: `defaults.to` or the report's own `to`.
+3. Select that destination and find its `destination outcome`. `skipped` and `dropped` name their reason. `indeterminate` with `timeout` means the provider took too long, which does not prove the report was lost.
+4. If the outcome is `submitted`, Flare handed the report over. Check what its `evidence` proves in [receipts](../../docs/receipts.md#evidence), then look in the provider's own tools.
 
 ## Tests
 
-The tests render into a real shadow root in jsdom and query it by role, over Flare's mock adapter. They count live listeners to prove that unmounting leaves none behind, render each wrapper through its own binding, render on the server to prove the wrappers are inert there, and assert that a secret placed in a report appears nowhere in the panel. Nothing here runs in a browser, so layout, styling and real pointer dragging are not covered.
+The tests render into a real shadow root in jsdom and query it by role, over Flare's mock adapter. They count live listeners to prove that unmounting leaves none behind, render each wrapper through its own binding, render on the server to prove the wrappers are inert there, and assert that a secret placed in a report appears nowhere in the panel. The example's browser tests open the panel in Chromium and check that it lists every destination. Resizing and pointer dragging are not covered in a browser.
 
 ## License
 
