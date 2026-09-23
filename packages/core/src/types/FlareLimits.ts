@@ -1,6 +1,6 @@
 /**
  * Bounds applied to every report before it is retained or sent. Lengths are
- * in characters, `totalSize` is the estimated serialized size in characters.
+ * in characters, and `totalSize` is the serialized size in characters.
  *
  * @example
  * ```ts
