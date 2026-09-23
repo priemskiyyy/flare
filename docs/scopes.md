@@ -50,6 +50,7 @@ const handleRequest = async (request: Request, userId: string) => {
     return await respond(request);
   } catch (error) {
     scope.capture(error);
+
     return new Response("Internal error", { status: 500 });
   }
 };
