@@ -80,7 +80,11 @@ test("a composable used outside a provider fails with a message that names the p
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
   expect(() => mount(Status)).toThrow(
-    "Flare composables must be used within a FlareProvider.",
+    expect.objectContaining({
+      name: "FlareError",
+      code: "INVALID_CONFIGURATION",
+      message: "Flare composables must be used within a FlareProvider.",
+    }),
   );
   expect(warn).toHaveBeenCalled();
 });
@@ -115,12 +119,12 @@ test("observing is passive: mounting the provider and every status composable op
 
   expect(view.text()).toBe("idle/idle");
   expect(flare.status.get()).toEqual({ state: "idle" });
-  expect(mock.openings).toEqual([]);
+  expect(mock.sessions).toEqual([]);
   expect(mock.submissions).toEqual([]);
 });
 
 test("the status composables follow the runtime and one destination, to ready and to failed", async () => {
-  const { flare } = create({ holdOpen: true });
+  const { flare } = create();
 
   const failing = create({
     onOpen: () => {
@@ -132,7 +136,7 @@ test("the status composables follow the runtime and one destination, to ready an
 
   flare.start();
   await nextTick();
-  expect(view.text()).toBe("started/starting");
+  expect(view.text()).toBe("started/ready");
 
   current.value = failing.flare;
   failing.flare.start();
@@ -144,7 +148,9 @@ test("a destination name given as a getter is followed when it changes", async (
   const first = createMockAdapter();
 
   const second = createMockAdapter({
-    available: { available: false, reason: "not here" },
+    onOpen: () => {
+      throw new Error("not here");
+    },
   });
 
   const flare = new Flare({
@@ -175,7 +181,7 @@ test("a destination name given as a getter is followed when it changes", async (
   name.value = "backup";
   await nextTick();
 
-  expect(view.text()).toBe("unavailable");
+  expect(view.text()).toBe("failed");
 });
 
 test("a status callback is told about later changes, and not about the value it started with", async () => {
@@ -201,10 +207,7 @@ test("a status callback is told about later changes, and not about the value it 
   await nextTick();
 
   expect(flareChanges).toEqual([{ state: "started" }]);
-  expect(destinationChanges.map((status) => status.state)).toEqual([
-    "starting",
-    "ready",
-  ]);
+  expect(destinationChanges.map((status) => status.state)).toEqual(["ready"]);
   expect(view.text()).toBe("started");
 });
 

@@ -42,7 +42,7 @@ test("server rendering is inert: it reads idle, subscribes to nothing, opens not
   expect(await renderToString(app)).toContain("idle/idle");
   expect(subscribe).not.toHaveBeenCalled();
   expect(destinationSubscribe).not.toHaveBeenCalled();
-  expect(mock.openings).toEqual([]);
+  expect(mock.sessions).toEqual([]);
   expect(mock.submissions).toEqual([]);
   flare.dispose();
 });
