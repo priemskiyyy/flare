@@ -1,21 +1,35 @@
 import type {
   AmbientReporterContext,
   AmbientSnapshot,
+  Breadcrumb,
 } from "@priemskiyyy/flare";
 
+import type { CrashlyticsAdapterOptions } from "src/types/CrashlyticsAdapterOptions";
 import type { CrashlyticsLike } from "src/types/CrashlyticsLike";
-import type { CrashlyticsReporterOptions } from "src/types/CrashlyticsReporterOptions";
 import { MAX_KEYS, MAX_VALUE_LENGTH } from "src/utils/constants/limits";
 
-type Parts = NonNullable<CrashlyticsReporterOptions<unknown>["ambient"]>;
+type Parts = NonNullable<CrashlyticsAdapterOptions<unknown>["ambient"]>;
 
-const cut = (value: string) => value.slice(0, MAX_VALUE_LENGTH);
+const truncateValue = (value: string) => value.slice(0, MAX_VALUE_LENGTH);
 
 // The data was sanitized by the core, so serializing it runs no application code.
-const toKeyValue = (value: unknown) =>
-  typeof value === "string" ? value : (JSON.stringify(value) ?? "");
+const getCustomKeyValue = (value: unknown) => {
+  if (typeof value === "string") {
+    return value;
+  }
 
-const toKeys = (snapshot: AmbientSnapshot, parts: Parts) => {
+  return JSON.stringify(value) ?? "";
+};
+
+const getBreadcrumbLogLine = ({ name, data }: Breadcrumb) => {
+  if (data === null) {
+    return name;
+  }
+
+  return `${name} ${getCustomKeyValue(data)}`;
+};
+
+const getCustomKeys = (snapshot: AmbientSnapshot, parts: Parts) => {
   const keys: Record<string, string> = Object.create(null);
 
   if (parts.tags === true) {
@@ -27,7 +41,7 @@ const toKeys = (snapshot: AmbientSnapshot, parts: Parts) => {
   if (parts.contexts === true) {
     for (const [name, context] of Object.entries(snapshot.contexts)) {
       for (const [key, value] of Object.entries(context)) {
-        keys[`${name}.${key}`] = toKeyValue(value);
+        keys[`${name}.${key}`] = getCustomKeyValue(value);
       }
     }
   }
@@ -52,7 +66,7 @@ export const createAmbientMirror = <TInstance>(
   let userId: string | null = null;
 
   // The native setters are asynchronous, and nothing here can act on a failure.
-  const contain = (task: () => PromiseLike<unknown>) => {
+  const callNativeSetter = (task: () => PromiseLike<unknown>) => {
     try {
       Promise.resolve(task()).catch(() => {});
     } catch {
@@ -66,7 +80,7 @@ export const createAmbientMirror = <TInstance>(
     }
 
     userId = next;
-    contain(() => sdk.setUserId(instance, next ?? ""));
+    callNativeSetter(() => sdk.setUserId(instance, next ?? ""));
   };
 
   const mirrorKeys = (next: Record<string, string>) => {
@@ -87,7 +101,7 @@ export const createAmbientMirror = <TInstance>(
 
       written.add(key);
       admitted.add(key);
-      payload[key] = cut(value);
+      payload[key] = truncateValue(value);
     }
 
     holding = admitted;
@@ -96,42 +110,30 @@ export const createAmbientMirror = <TInstance>(
       return;
     }
 
-    contain(() => sdk.setAttributes(instance, payload));
+    callNativeSetter(() => sdk.setAttributes(instance, payload));
   };
 
-  const mirrorsKeys = parts.tags === true || parts.contexts === true;
-  const mirrorsSession = parts.user === true || mirrorsKeys;
+  const ambient: AmbientReporterContext = {
+    session: (snapshot) => {
+      if (parts.user === true) {
+        mirrorUser(snapshot.user?.id ?? null);
+      }
 
-  const session: AmbientReporterContext["session"] = (snapshot) => {
-    if (parts.user === true) {
-      mirrorUser(snapshot.user?.id ?? null);
-    }
+      if (parts.tags === true || parts.contexts === true) {
+        mirrorKeys(getCustomKeys(snapshot, parts));
+      }
+    },
+    breadcrumb: (breadcrumb) => {
+      if (parts.breadcrumbs !== true) {
+        return;
+      }
 
-    if (mirrorsKeys) {
-      mirrorKeys(toKeys(snapshot, parts));
-    }
+      sdk.log(instance, truncateValue(getBreadcrumbLogLine(breadcrumb)));
+    },
   };
-
-  const enabled = mirrorsSession || parts.breadcrumbs === true;
-
-  const context: AmbientReporterContext | undefined = !enabled
-    ? undefined
-    : {
-        ...(mirrorsSession ? { session } : {}),
-        ...(parts.breadcrumbs !== true
-          ? {}
-          : {
-              breadcrumb: ({ name, data }) => {
-                const line =
-                  data === null ? name : `${name} ${toKeyValue(data)}`;
-
-                sdk.log(instance, cut(line));
-              },
-            }),
-      };
 
   return {
-    context,
+    ambient,
     /** The user id Flare last wrote, or `null` when it wrote none or blanked it. */
     userId: () => userId,
     /** Blanks what was mirrored. Log lines stay: Crashlytics has no way to clear them. */

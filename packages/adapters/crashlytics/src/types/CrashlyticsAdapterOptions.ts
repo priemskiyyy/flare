@@ -1,15 +1,15 @@
 import type { CrashlyticsLike } from "src/types/CrashlyticsLike";
 
 /**
- * Options for `crashlytics()`. There is no ownership option: Crashlytics is
- * initialized by the native Firebase SDK, never from JavaScript.
+ * Options for `crashlytics()`. The native Firebase SDK initializes
+ * Crashlytics, never JavaScript.
  *
  * @example
  * ```ts
  * crashlytics({ sdk: Crashlytics, ambient: { user: true, tags: true } });
  * ```
  */
-export type CrashlyticsReporterOptions<TInstance> = {
+export type CrashlyticsAdapterOptions<TInstance> = {
   /** The Crashlytics module, passed as its namespace. */
   sdk: CrashlyticsLike<TInstance>;
   /**

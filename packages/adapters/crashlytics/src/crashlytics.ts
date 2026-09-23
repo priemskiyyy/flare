@@ -1,31 +1,56 @@
-import { createReporterAdapter, rebuildError } from "@priemskiyyy/flare";
-import type { ReporterCapabilities } from "@priemskiyyy/flare";
+import { SanitizedError } from "@priemskiyyy/flare";
+import type {
+  MappingLoss,
+  ReporterAdapter,
+  SanitizedReport,
+} from "@priemskiyyy/flare";
 
-import type { CrashlyticsReporterOptions } from "src/types/CrashlyticsReporterOptions";
-import { assertUnreachable } from "src/utils/assertUnreachable";
+import type { CrashlyticsAdapterOptions } from "src/types/CrashlyticsAdapterOptions";
 import { createAmbientMirror } from "src/utils/createAmbientMirror";
-import { getReportLosses } from "src/utils/getReportLosses";
 
-const CAPABILITIES: ReporterCapabilities = {
-  // recordError takes an Error and nothing else. Setting the global user or
-  // keys around the call would leak into every other report, so it is not done.
-  eventLocal: { user: false, tags: false, contexts: false, breadcrumbs: false },
-  messages: false,
-  evidence: "sdk-call-returned",
-  // sendUnsentReports acknowledges nothing, so it is not a flush.
-  flush: "none",
-  // A non-fatal is stored on the device and usually sent on the next launch.
-  queue: "sdk-persistent",
-  automaticCapture: "provider-owned",
-  instance: "singleton",
-  // Collection can be disabled, in which case nothing recorded is ever sent.
-  filtering: "provider-hooks",
+type ExceptionReport = Extract<SanitizedReport, { kind: "exception" }>;
+
+// Everything `recordError` has no argument for, listed even with the ambient
+// integration on: what Crashlytics attaches then is its global state.
+const getReportLosses = (report: ExceptionReport): MappingLoss[] => {
+  const losses: MappingLoss[] = [];
+
+  if (report.identity.user !== null) {
+    losses.push({ path: "identity.user", reason: "unsupported" });
+  }
+
+  if (Object.keys(report.tags).length > 0) {
+    losses.push({ path: "tags", reason: "unsupported" });
+  }
+
+  if (Object.keys(report.contexts).length > 0) {
+    losses.push({ path: "contexts", reason: "unsupported" });
+  }
+
+  if (report.breadcrumbs.length > 0) {
+    losses.push({ path: "breadcrumbs", reason: "unsupported" });
+  }
+
+  if (report.operation !== null) {
+    losses.push({ path: "operation", reason: "unsupported" });
+  }
+
+  // Whatever is recorded is a non-fatal. There is no other level.
+  if (report.level !== "error") {
+    losses.push({ path: "level", reason: "unsupported" });
+  }
+
+  if (report.exception.aggregated.length > 0) {
+    losses.push({ path: "exception.aggregated", reason: "unsupported" });
+  }
+
+  return losses;
 };
 
 /**
  * Records non-fatal errors in Firebase Crashlytics on React Native, through
  * the module the application injects. Crashlytics can attach nothing to one
- * report, and this reporter does not pretend otherwise: what a report carries
+ * report, and this adapter does not pretend otherwise: what a report carries
  * beyond its error is listed on the receipt as a loss. User, keys and logs
  * reach Crashlytics only through the opt-in ambient integration.
  *
@@ -41,46 +66,45 @@ const CAPABILITIES: ReporterCapabilities = {
 export const crashlytics = <TInstance>({
   sdk,
   ambient = {},
-}: CrashlyticsReporterOptions<TInstance>) =>
-  createReporterAdapter<TInstance>({
-    name: "crashlytics",
-    capabilities: CAPABILITIES,
-    singleton: sdk,
-    open: (_context, lifetime) => {
-      const instance = sdk.getCrashlytics();
-      const mirror = createAmbientMirror(sdk, instance, ambient);
+}: CrashlyticsAdapterOptions<TInstance>): ReporterAdapter<TInstance> => ({
+  name: "crashlytics",
+  open: () => {
+    const instance = sdk.getCrashlytics();
+    const mirror = createAmbientMirror(sdk, instance, ambient);
 
-      lifetime.add(mirror.clear);
+    return {
+      native: instance,
+      submit: (report, { currentGeneration }) => {
+        if (report.kind === "message") {
+          return { status: "skipped", reason: "unsupported-report-kind" };
+        }
 
-      return {
-        native: instance,
-        submit: (report) => {
-          if (report.kind === "message") {
-            return { status: "skipped", reason: "unsupported-report-kind" };
-          }
+        // Crashlytics attaches its global user id natively. Where Flare wrote
+        // that id, it is compared with the report's user.
+        const reportUserId = report.identity.user?.id ?? null;
 
-          if (report.kind !== "exception") {
-            return assertUnreachable(report);
-          }
+        if (ambient.user === true && reportUserId !== mirror.userId()) {
+          return { status: "skipped", reason: "identity-mismatch" };
+        }
 
-          // Crashlytics attaches its global user id natively. Where Flare
-          // wrote that id, a report that belongs to someone else would be
-          // recorded under the wrong account, so it is not recorded at all.
-          const reportUserId = report.identity.user?.id ?? null;
+        // Otherwise the account stands in for the id Flare cannot read: a
+        // report whose user signed out since would land on the next one.
+        const isStale = report.identity.generation !== currentGeneration();
 
-          if (ambient.user === true && reportUserId !== mirror.userId()) {
-            return { status: "skipped", reason: "identity-mismatch" };
-          }
+        if (ambient.user !== true && reportUserId !== null && isStale) {
+          return { status: "skipped", reason: "identity-mismatch" };
+        }
 
-          sdk.recordError(instance, rebuildError(report.exception));
+        sdk.recordError(instance, new SanitizedError(report.exception));
 
-          return {
-            status: "submitted",
-            evidence: "sdk-call-returned",
-            losses: getReportLosses(report),
-          };
-        },
-        ...(mirror.context === undefined ? {} : { ambient: mirror.context }),
-      };
-    },
-  });
+        return {
+          status: "submitted",
+          evidence: "sdk-call-returned",
+          losses: getReportLosses(report),
+        };
+      },
+      ambient: mirror.ambient,
+      dispose: mirror.clear,
+    };
+  },
+});

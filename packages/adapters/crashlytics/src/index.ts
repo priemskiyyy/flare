@@ -1,4 +1,4 @@
 export { crashlytics } from "src/crashlytics";
 
+export type { CrashlyticsAdapterOptions } from "src/types/CrashlyticsAdapterOptions";
 export type { CrashlyticsLike } from "src/types/CrashlyticsLike";
-export type { CrashlyticsReporterOptions } from "src/types/CrashlyticsReporterOptions";

@@ -1,6 +1,6 @@
 // Typechecked, never imported: these assignments fail compilation if the real
 // React Native Firebase module stops satisfying the structural type the
-// reporter is written against, or if its instance stops flowing into the
+// adapter is written against, or if its instance stops flowing into the
 // native handle.
 import { Flare } from "@priemskiyyy/flare";
 import * as Crashlytics from "@react-native-firebase/crashlytics";
@@ -30,6 +30,3 @@ if (instance !== null) {
 
 // @ts-expect-error -- an object that is not the Crashlytics module is refused.
 crashlytics({ sdk: { recordError: () => {} } });
-
-// @ts-expect-error -- Crashlytics is initialized natively, so there is no ownership option.
-crashlytics({ sdk: Crashlytics, ownership: "owned" });

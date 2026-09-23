@@ -1,5 +1,5 @@
 /**
- * The part of the modular React Native Firebase Crashlytics API the reporter
+ * The part of the modular React Native Firebase Crashlytics API the adapter
  * calls. The module namespace of `@react-native-firebase/crashlytics`
  * satisfies it, so the package does not import it: the application injects it.
  *
