@@ -34,6 +34,16 @@ test("a report within the limit is returned untouched", () => {
   expect(fitReport(original, 10_000)).toBe(original);
 });
 
+test("the limit is the exact serialized length: at it nothing is shed, one below it something is", () => {
+  const original = report({
+    breadcrumbs: [crumb("first"), crumb("second"), crumb("third")],
+    contexts: { upload: { attempt: 1 }, 'device "a"': { model: "m" } },
+  });
+
+  expect(fitReport(original, sizeOf(original))).toBe(original);
+  expect(fitReport(original, sizeOf(original) - 1)).not.toBe(original);
+});
+
 test("an oversized report sheds its oldest breadcrumbs first", () => {
   const original = report({
     breadcrumbs: [crumb("first"), crumb("second"), crumb("third")],
