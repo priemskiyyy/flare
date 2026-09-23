@@ -8,7 +8,7 @@ Destinations have names. The names are typed, so a destination that does not exi
 
 ```ts
 import { Flare } from "@priemskiyyy/flare";
-import { consoleReporter } from "@priemskiyyy/flare-console";
+import { console } from "@priemskiyyy/flare-console";
 import { http } from "@priemskiyyy/flare-http";
 import { sentry } from "@priemskiyyy/flare-sentry";
 import * as Sentry from "@sentry/browser";
@@ -16,53 +16,58 @@ import * as Sentry from "@sentry/browser";
 const flare = new Flare({
   destinations: {
     sentry: sentry({ sdk: Sentry }),
-    backend: http({ endpoint: "/api/error-reports" }),
-    console: consoleReporter(),
+    backend: http({ request: sendReport }),
+    console: console(),
   },
-  default: ["sentry", "backend"],
+  defaults: { to: ["sentry", "backend"] },
 });
 ```
 
-## The three ways to choose
+## Choosing destinations
 
-**`default`** lists where a report goes when nothing else says. Without it, a report goes to every destination.
+**`defaults.to`** says where a report goes unless the report says otherwise. Without it, a report goes to every destination. A list that names a destination you never configured throws a `FlareError` with the code `INVALID_CONFIGURATION` from the constructor.
 
-**`to`** on one report replaces the default for that report:
+**`to`** on one report replaces `defaults.to` for that report. It never merges with it:
 
 ```ts
 flare.capture(error, { to: ["backend"] });
 ```
 
-**`route`** decides per report. It receives the finished, sanitized report and returns names. `route` and `default` are mutually exclusive.
+**`defaults.to`** can also be a function that decides per report. It receives the finished, sanitized report and returns names:
 
 ```ts
 import { Flare } from "@priemskiyyy/flare";
-import { consoleReporter } from "@priemskiyyy/flare-console";
+import { console } from "@priemskiyyy/flare-console";
 import { http } from "@priemskiyyy/flare-http";
 
 const flare = new Flare({
   destinations: {
-    backend: http({ endpoint: "/api/error-reports" }),
-    console: consoleReporter(),
+    backend: http({ request: sendReport }),
+    console: console(),
   },
-  route: ({ report }) => {
-    if (report.tags.area === "billing") {
-      return ["backend", "console"];
-    }
-    return ["console"];
+  defaults: {
+    to: ({ report }) => {
+      if (report.tags.area === "billing") {
+        return ["backend", "console"];
+      }
+
+      return ["console"];
+    },
   },
 });
 ```
 
-An explicit `to` wins over `route`. Returning an empty list drops the report with the reason `no-destinations`, which is how you filter a report out entirely.
+A report's own `to` wins over the function too, and the function is not called for it. Returning an empty list drops the report with the reason `no-destinations`, which is how you filter a report out entirely.
+
+A report's `to` is not checked against `defaults.to`: it replaces it. Keep what must never reach a destination out of the report with [redaction](privacy.md), which runs before any destination sees the report, however it was chosen.
 
 ## Routing fails closed
 
-A route decides who may see a report, so a broken route must never widen the audience. When `route` throws, returns something that is not a list, or names a destination that does not exist, the report is dropped with the reason `route-failed`. It is not sent to the default, and it is not sent to everyone.
+A broken rule must never widen the audience. When a `defaults.to` function throws, returns something that is not a list, or names a destination that does not exist, or a report's `to` names one, the report is dropped with the reason `route-failed`. It is not sent anywhere else.
 
 ## Fan-out is independent
 
-Each destination gets the same frozen report and its own outcome. A destination that is slow, down or throwing does not delay or affect the others. A destination that does not answer within `deadlineMs`, five seconds by default, settles as `indeterminate` with the reason `deadline`, because the report may or may not have arrived.
+Each destination gets the same frozen report and its own outcome. A destination that is slow, down or throwing does not delay or affect the others. A destination that does not answer within `timeout`, five seconds by default, settles as `indeterminate` with the reason `timeout`, because the report may or may not have arrived.
 
 ```ts
 const receipt = flare.capture(error);
@@ -81,16 +86,22 @@ Routing is ordinary configuration, so choosing destinations per environment is o
 
 ```ts
 import { Flare } from "@priemskiyyy/flare";
-import { consoleReporter } from "@priemskiyyy/flare-console";
+import { console } from "@priemskiyyy/flare-console";
 import { http } from "@priemskiyyy/flare-http";
 
-const isProduction = import.meta.env.PROD;
+const getDefaultDestinations = (): Array<"backend" | "console"> => {
+  if (import.meta.env.PROD) {
+    return ["backend"];
+  }
+
+  return ["console"];
+};
 
 const flare = new Flare({
   destinations: {
-    backend: http({ endpoint: "/api/error-reports" }),
-    console: consoleReporter(),
+    backend: http({ request: sendReport }),
+    console: console(),
   },
-  default: isProduction ? ["backend"] : ["console"],
+  defaults: { to: getDefaultDestinations() },
 });
 ```
