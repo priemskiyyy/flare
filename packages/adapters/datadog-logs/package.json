@@ -1,0 +1,60 @@
+{
+  "name": "@priemskiyyy/flare-datadog-logs",
+  "version": "0.1.0",
+  "description": "Datadog Logs destination for flare in the browser: each report, messages included, is one log with its own status, error and attributes under flare, sent only while Datadog attaches the report's user, over the datadogLogs you inject.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/priemskiyyy/flare.git",
+    "directory": "packages/adapters/datadog-logs"
+  },
+  "bugs": {
+    "url": "https://github.com/priemskiyyy/flare/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "lint:typescript": "tsc --noEmit -p .",
+    "lint:eslint": "eslint src",
+    "test:unit": "vitest run --root ../../.. --project datadog-logs"
+  },
+  "peerDependencies": {
+    "@priemskiyyy/flare": ">=0.1.0 <0.2",
+    "@datadog/browser-logs": ">=7.0.0 <8"
+  },
+  "peerDependenciesMeta": {
+    "@datadog/browser-logs": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@priemskiyyy/flare": "workspace:*"
+  },
+  "keywords": [
+    "datadog",
+    "logs",
+    "error-tracking",
+    "error-reporting",
+    "typescript",
+    "flare",
+    "adapter"
+  ],
+  "homepage": "https://priemskiyyy.github.io/flare/"
+}
