@@ -94,6 +94,21 @@ const exampleProjects: TestProjectConfiguration[] = [
       environment: "jsdom",
     },
   },
+  {
+    extends: true,
+    plugins: [solid()],
+    resolve: {
+      alias: exampleAliases("solid"),
+      conditions: ["development", "browser"],
+      dedupe: ["solid-js"],
+    },
+    test: {
+      name: "example-solid",
+      include: ["examples/solid/src/**/*.test.{ts,tsx}"],
+      environment: "jsdom",
+      server: { deps: { inline: [/solid-js/, /@solidjs\/testing-library/] } },
+    },
+  },
 ];
 
 // Every adapter is an ordinary node project named after its folder, so a new
