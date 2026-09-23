@@ -16,10 +16,10 @@ Create and start the Flare outside Solid, as early as your application allows, t
 
 ```ts
 import { Flare } from "@priemskiyyy/flare";
-import { consoleReporter } from "@priemskiyyy/flare-console";
+import { console } from "@priemskiyyy/flare-console";
 
 export const flare = new Flare({
-  destinations: { console: consoleReporter() },
+  destinations: { console: console() },
 });
 
 flare.start();
@@ -41,6 +41,8 @@ flare.start();
 ## Type it once
 
 Register your Flare, and every primitive and the boundary know its destination names and its schema:
+
+<!-- snippet: fragment -->
 
 ```ts
 declare module "@priemskiyyy/flare-solid" {
