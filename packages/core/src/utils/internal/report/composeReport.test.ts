@@ -1,6 +1,8 @@
 import { expect, test } from "vitest";
 
 import type { ReportLayer } from "src/types/internal/ReportLayer";
+import type { MappingLoss } from "src/types/MappingLoss";
+import type { NormalizedException } from "src/types/NormalizedException";
 import type { SessionSnapshot } from "src/types/SessionSnapshot";
 import { composeReport } from "src/utils/internal/report/composeReport";
 
@@ -26,7 +28,7 @@ const compose = (
     payload: { kind: "message", message: "Unexpected payment state" },
     defaults: EMPTY_LAYER,
     session: session(),
-    scope: null,
+    scope: EMPTY_LAYER,
     options: EMPTY_LAYER,
     losses: [],
     ...overrides,
@@ -102,8 +104,8 @@ test("operation comes from the highest layer that names one", () => {
 });
 
 test("an exception defaults to error and a message to info", () => {
-  const exception = {
-    origin: "error" as const,
+  const exception: NormalizedException = {
+    origin: "error",
     name: "Error",
     message: "boom",
     stack: null,
@@ -135,7 +137,7 @@ test("breadcrumbs are the session's snapshot at capture time", () => {
 });
 
 test("losses gathered on the way in travel with the report", () => {
-  const losses = [{ path: "tags.plan", reason: "invalid" as const }];
+  const losses: MappingLoss[] = [{ path: "tags.plan", reason: "invalid" }];
 
   expect(compose({ losses }).losses).toEqual(losses);
 });

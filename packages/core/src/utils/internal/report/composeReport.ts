@@ -11,7 +11,7 @@ type Composition = {
   payload: ReportPayload;
   defaults: ReportLayer;
   session: SessionSnapshot;
-  scope: ReportLayer | null;
+  scope: ReportLayer;
   options: ReportLayer;
   losses: readonly MappingLoss[];
 };
@@ -52,13 +52,13 @@ export const composeReport = ({
     tags: Object.freeze({
       ...defaults.tags,
       ...session.tags,
-      ...scope?.tags,
+      ...scope.tags,
       ...options.tags,
     }),
     contexts: Object.freeze({
       ...defaults.contexts,
       ...session.contexts,
-      ...scope?.contexts,
+      ...scope.contexts,
       ...options.contexts,
     }),
     breadcrumbs: session.breadcrumbs,
