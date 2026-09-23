@@ -4,7 +4,7 @@ description: "Use Flare in React: publish it with a provider, report render erro
 
 # React
 
-`@priemskiyyy/flare-react` is a provider, an error boundary and two status hooks. It is deliberately thin: you report with `flare.capture`, which needs no hook.
+`@priemskiyyy/flare-react` is a provider, an error boundary, `useFlare` and two status hooks. It is deliberately thin: reporting is `flare.capture`, and the bindings never start, stop or dispose anything.
 
 ```sh
 pnpm add @priemskiyyy/flare @priemskiyyy/flare-react
@@ -16,11 +16,11 @@ Create and start the Flare outside React, then publish it:
 
 ```tsx
 import { Flare } from "@priemskiyyy/flare";
-import { consoleReporter } from "@priemskiyyy/flare-console";
+import { console } from "@priemskiyyy/flare-console";
 import { FlareErrorBoundary, FlareProvider } from "@priemskiyyy/flare-react";
 
 export const flare = new Flare({
-  destinations: { console: consoleReporter() },
+  destinations: { console: console() },
 });
 
 flare.start();
@@ -38,7 +38,7 @@ The provider owns no lifetime. Mounting it starts nothing and unmounting it disp
 
 ## Render errors
 
-`FlareErrorBoundary` reports what React's error boundaries can see, once, with React's component stack attached as the `react` context:
+`FlareErrorBoundary` reports what React's error boundaries can see, once, with React's component stack attached as the `react` context, and renders its `fallback`. `onError` is told about each report, with the error and its receipt:
 
 ```tsx
 import { FlareErrorBoundary } from "@priemskiyyy/flare-react";
@@ -49,21 +49,44 @@ export const CartSection = () => (
       <RetryScreen error={error} onRetryPress={reset} />
     )}
     capture={{ tags: { area: "cart" }, level: "fatal" }}
+    onError={({ receipt }) => console.debug("reported", receipt.id)}
   >
     <Cart />
   </FlareErrorBoundary>
 );
 ```
 
-A boundary does not see errors in event handlers, promises, timers or server rendering. That is React's rule. Report those yourself:
+With a typed schema, declare the `react` context, or it is dropped and recorded as a loss:
 
 ```ts
-const handleSubmitPress = async () => {
-  try {
-    await submit();
-  } catch (error) {
-    flare.capture(error, { operation: "submit-order" });
-  }
+import { z } from "zod";
+
+const schema = {
+  contexts: { react: z.object({ componentStack: z.string() }) },
+};
+```
+
+A boundary must sit inside a `FlareProvider`, and throws while rendering when it does not.
+
+## Report from a component
+
+A boundary does not see errors in event handlers, promises, timers or server rendering. That is React's rule. Report those through `useFlare()`, which returns the provider's Flare and throws a `FlareError` with the code `INVALID_CONFIGURATION` outside a provider:
+
+```tsx
+import { useFlare } from "@priemskiyyy/flare-react";
+
+export const SubmitButton = () => {
+  const flare = useFlare();
+
+  const handleSubmitPress = async () => {
+    try {
+      await submit();
+    } catch (error) {
+      flare.capture(error, { operation: "submit-order" });
+    }
+  };
+
+  return <button onClick={handleSubmitPress}>Submit</button>;
 };
 ```
 
@@ -89,6 +112,8 @@ Both hooks only observe. Rendering them starts nothing and reports nothing. On t
 ## Type it once
 
 Register your Flare, and the hooks and the boundary know your destination names and your schema:
+
+<!-- snippet: fragment -->
 
 ```ts
 declare module "@priemskiyyy/flare-react" {
