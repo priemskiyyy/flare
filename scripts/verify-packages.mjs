@@ -68,34 +68,60 @@ const stageRelease = (name, tarball) => {
 const read = (file) =>
   readFileSync(path.join(consumer, "node_modules", file), "utf8");
 
-// Every published entry: whether it is a client module, and which provider SDK
-// it must never import. An adapter is handed its SDK by the application.
-const bundles = [
-  { file: "@priemskiyyy/flare/dist/index.js" },
-  { file: "@priemskiyyy/flare/dist/mock.js" },
-  { file: "@priemskiyyy/flare/dist/testing.js" },
-  { file: "@priemskiyyy/flare-react/dist/index.js", client: true },
-  { file: "@priemskiyyy/flare-vue/dist/index.js" },
-  { file: "@priemskiyyy/flare-solid/dist/index.js" },
-  // Svelte ships its sources unbundled, for the application's own compiler.
-  { file: "@priemskiyyy/flare-svelte/dist/index.js" },
-  { file: "@priemskiyyy/flare-devtools/dist/index.js" },
-  { file: "@priemskiyyy/flare-devtools/dist/react.js", client: true },
-  { file: "@priemskiyyy/flare-devtools/dist/vue.js" },
-  { file: "@priemskiyyy/flare-devtools/dist/solid.js" },
-  { file: "@priemskiyyy/flare-devtools/dist/svelte.js" },
-  { file: "@priemskiyyy/flare-trace/dist/index.js" },
-  { file: "@priemskiyyy/flare-console/dist/index.js" },
-  { file: "@priemskiyyy/flare-http/dist/index.js" },
-  { file: "@priemskiyyy/flare-sentry/dist/index.js", sdk: "@sentry/" },
-  { file: "@priemskiyyy/flare-sentry/dist/reactNative.js", sdk: "@sentry/" },
-  { file: "@priemskiyyy/flare-bugsnag/dist/index.js", sdk: "@bugsnag/" },
-  { file: "@priemskiyyy/flare-bugsnag/dist/reactNative.js", sdk: "@bugsnag/" },
-  {
-    file: "@priemskiyyy/flare-crashlytics/dist/index.js",
-    sdk: "@react-native-firebase/",
-  },
+const packages = ["packages", "packages/adapters"].flatMap((group) =>
+  readdirSync(path.join(workspace, group))
+    .filter((directory) =>
+      existsSync(path.join(workspace, group, directory, "package.json")),
+    )
+    .map((directory) => {
+      const packageDirectory = path.join(workspace, group, directory);
+
+      const manifest = JSON.parse(
+        readFileSync(path.join(packageDirectory, "package.json"), "utf8"),
+      );
+
+      return { group, directory: packageDirectory, manifest };
+    }),
+);
+
+// A manifest cannot say which entries are client modules, so they are listed.
+const clientEntries = [
+  "@priemskiyyy/flare-react/dist/index.js",
+  "@priemskiyyy/flare-devtools/dist/react.js",
 ];
+
+// An adapter is handed its SDK by the application, so its bundle imports no
+// optional peer: not the peer's scope, or the peer itself when it has none.
+const getProviderPrefixes = ({ group, manifest }) => {
+  if (group !== "packages/adapters") {
+    return [];
+  }
+
+  return Object.keys(manifest.peerDependenciesMeta ?? {}).map((name) => {
+    if (name.startsWith("@")) {
+      return `${name.split("/")[0]}/`;
+    }
+
+    return name;
+  });
+};
+
+// Every published entry. Svelte ships its sources unbundled, for the
+// application's own compiler, under its own condition.
+const bundles = packages.flatMap((entry) =>
+  Object.values(entry.manifest.exports).map((target) => {
+    const file = path.posix.join(
+      entry.manifest.name,
+      target.import ?? target.svelte,
+    );
+
+    return {
+      file,
+      client: clientEntries.includes(file),
+      sdks: getProviderPrefixes(entry),
+    };
+  }),
+);
 
 // A real import or re-export, not the word in a JSDoc example.
 const importsFrom = (bundle, prefix) =>
@@ -108,63 +134,45 @@ try {
   rmSync(release, { recursive: true, force: true });
   mkdirSync(artifacts, { recursive: true });
 
-  const tarballs = ["packages", "packages/adapters"].flatMap((group) =>
-    readdirSync(path.join(workspace, group))
-      .filter((directory) =>
-        existsSync(path.join(workspace, group, directory, "package.json")),
-      )
-      .map((directory) => {
-        const packageDirectory = path.join(workspace, group, directory);
+  const tarballs = packages.map(({ directory: packageDirectory, manifest }) => {
+    process.stdout.write(
+      run("pnpm", ["exec", "publint", packageDirectory], workspace),
+    );
 
-        process.stdout.write(
-          run("pnpm", ["exec", "publint", packageDirectory], workspace),
-        );
+    const [packed] = JSON.parse(
+      run(
+        "npm",
+        ["pack", "--ignore-scripts", "--json", "--pack-destination", artifacts],
+        packageDirectory,
+      ),
+    );
 
-        const [packed] = JSON.parse(
-          run(
-            "npm",
-            [
-              "pack",
-              "--ignore-scripts",
-              "--json",
-              "--pack-destination",
-              artifacts,
-            ],
-            packageDirectory,
-          ),
-        );
+    assert(packed.files.some((file) => file.path === "README.md"));
+    assert(packed.files.some((file) => file.path === "LICENSE"));
+    assert(!packed.files.some((file) => file.path.startsWith("src/")));
+    assert(
+      !packed.files.some((file) =>
+        /\.(test|fixture|contracts)\./.test(file.path),
+      ),
+    );
 
-        assert(packed.files.some((file) => file.path === "README.md"));
-        assert(packed.files.some((file) => file.path === "LICENSE"));
-        assert(!packed.files.some((file) => file.path.startsWith("src/")));
+    // pnpm rewrites `workspace:*` only when it publishes. A tarball that
+    // still carries it cannot be installed by anyone.
+    for (const field of ["dependencies", "peerDependencies"]) {
+      for (const [name, range] of Object.entries(manifest[field] ?? {})) {
         assert(
-          !packed.files.some((file) =>
-            /\.(test|fixture|contracts)\./.test(file.path),
-          ),
+          !String(range).startsWith("workspace:"),
+          `${manifest.name} publishes ${name} as ${range}.`,
         );
+      }
+    }
 
-        // pnpm rewrites `workspace:*` only when it publishes. A tarball that
-        // still carries it cannot be installed by anyone.
-        const manifest = JSON.parse(
-          readFileSync(path.join(packageDirectory, "package.json"), "utf8"),
-        );
+    const tarball = path.join(artifacts, packed.filename);
 
-        for (const field of ["dependencies", "peerDependencies"]) {
-          for (const [name, range] of Object.entries(manifest[field] ?? {})) {
-            assert(
-              !String(range).startsWith("workspace:"),
-              `${manifest.name} publishes ${name} as ${range}.`,
-            );
-          }
-        }
+    stageRelease(packed.name, tarball);
 
-        const tarball = path.join(artifacts, packed.filename);
-
-        stageRelease(packed.name, tarball);
-
-        return tarball;
-      }),
-  );
+    return tarball;
+  });
 
   json("package.json", {
     name: "flare-package-consumer",
@@ -194,7 +202,7 @@ try {
     ...tarballs,
   ]);
 
-  for (const { file, client = false, sdk } of bundles) {
+  for (const { file, client, sdks } of bundles) {
     const bundle = read(file);
 
     assert(!bundle.includes('from "src/'), `${file} kept a src alias import.`);
@@ -206,36 +214,28 @@ try {
     // Default exports break silently under some React Native interop.
     assert(!/^export default /m.test(bundle), `${file} has a default export.`);
 
-    if (sdk !== undefined) {
-      assert(!importsFrom(bundle, sdk), `${file} imports a provider SDK.`);
+    for (const sdk of sdks) {
+      assert(!importsFrom(bundle, sdk), `${file} imports ${sdk}.`);
     }
   }
 
   // Exactly one copy of the core, and one of the inspector, however many
   // packages build on them.
-  for (const dependent of [
-    "flare-react",
-    "flare-vue",
-    "flare-solid",
-    "flare-svelte",
-    "flare-devtools",
-    "flare-trace",
-    "flare-console",
-    "flare-http",
-    "flare-sentry",
-    "flare-bugsnag",
-    "flare-crashlytics",
-  ]) {
+  for (const { manifest } of packages) {
+    if (manifest.name === "@priemskiyyy/flare") {
+      continue;
+    }
+
     assert(
       !existsSync(
         path.join(
           consumer,
-          "node_modules/@priemskiyyy",
-          dependent,
+          "node_modules",
+          manifest.name,
           "node_modules/@priemskiyyy/flare",
         ),
       ),
-      `${dependent} installed its own copy of the core.`,
+      `${manifest.name} installed its own copy of the core.`,
     );
   }
 
