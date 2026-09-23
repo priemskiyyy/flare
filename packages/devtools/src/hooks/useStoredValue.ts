@@ -1,4 +1,5 @@
 import { createSignal, onCleanup } from "solid-js";
+import type { Accessor } from "solid-js";
 
 /**
  * A signal backed by `localStorage` and kept in sync with other tabs through
@@ -9,7 +10,7 @@ export const useStoredValue = <TValue>(
   key: string,
   parse: (raw: unknown) => TValue,
   fallback: TValue,
-) => {
+): [Accessor<TValue>, (next: TValue) => void] => {
   const read = (): TValue => {
     try {
       const raw = localStorage.getItem(key);
@@ -47,5 +48,5 @@ export const useStoredValue = <TValue>(
     }
   };
 
-  return [value, update] as const;
+  return [value, update];
 };

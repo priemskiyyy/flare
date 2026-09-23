@@ -27,7 +27,7 @@ const DEFAULT_SIZE = { bottom: 420, right: 520 } satisfies Record<
 
 const PREFERENCES_KEY = "@priemskiyyy/flare-devtools";
 
-export type DevtoolsProps = {
+type DevtoolsProps = {
   flare: Accessor<ObservedFlare>;
   maxEvents: Accessor<number>;
   initialIsOpen: boolean;
@@ -54,10 +54,17 @@ export const Devtools = (props: DevtoolsProps) => {
 
   const size = createMemo(() => {
     const { height, width } = preferences();
+    const current = position();
 
-    return position() === "bottom"
-      ? (height ?? DEFAULT_SIZE.bottom)
-      : (width ?? DEFAULT_SIZE.right);
+    if (current === "bottom") {
+      return height ?? DEFAULT_SIZE.bottom;
+    }
+
+    if (current === "right") {
+      return width ?? DEFAULT_SIZE.right;
+    }
+
+    return assertUnreachable(current);
   });
 
   const hasUnseenError = createMemo(() => {
@@ -77,15 +84,39 @@ export const Devtools = (props: DevtoolsProps) => {
   };
 
   const handleSizeChange = (next: number) => {
-    const key = position() === "bottom" ? "height" : "width";
+    const current = position();
 
-    setPreferences({ ...preferences(), [key]: next });
+    if (current === "bottom") {
+      setPreferences({ ...preferences(), height: next });
+
+      return;
+    }
+
+    if (current === "right") {
+      setPreferences({ ...preferences(), width: next });
+
+      return;
+    }
+
+    assertUnreachable(current);
   };
 
   const handleDock = () => {
-    const next: PanelPosition = position() === "bottom" ? "right" : "bottom";
+    const current = position();
 
-    setPreferences({ ...preferences(), position: next });
+    if (current === "bottom") {
+      setPreferences({ ...preferences(), position: "right" });
+
+      return;
+    }
+
+    if (current === "right") {
+      setPreferences({ ...preferences(), position: "bottom" });
+
+      return;
+    }
+
+    assertUnreachable(current);
   };
 
   createEffect(() => {

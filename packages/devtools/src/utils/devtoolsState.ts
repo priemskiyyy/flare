@@ -11,14 +11,16 @@ export type DevtoolsAction =
   { type: "OPEN" } | { type: "CLOSE"; at: number } | { type: "TOGGLE_PAUSE" };
 
 /** Focus only moves after the user opens or closes the panel, never on mount. */
-export const initialDevtoolsState = (
-  initialIsOpen: boolean,
-): DevtoolsState => ({
-  panel: initialIsOpen
-    ? { status: "OPEN", autoFocus: false }
-    : { status: "CLOSED", autoFocus: false, closedAt: 0 },
-  isPaused: false,
-});
+export const initialDevtoolsState = (initialIsOpen: boolean): DevtoolsState => {
+  if (initialIsOpen) {
+    return { panel: { status: "OPEN", autoFocus: false }, isPaused: false };
+  }
+
+  return {
+    panel: { status: "CLOSED", autoFocus: false, closedAt: 0 },
+    isPaused: false,
+  };
+};
 
 export const devtoolsReducer = (
   state: DevtoolsState,

@@ -7,7 +7,13 @@ afterEach(() => {
   localStorage.clear();
 });
 
-const parseCount = (raw: unknown) => (typeof raw === "number" ? raw : 0);
+const parseCount = (raw: unknown) => {
+  if (typeof raw !== "number") {
+    return 0;
+  }
+
+  return raw;
+};
 
 test("reads the stored value, writes updates, and follows other tabs", () => {
   localStorage.setItem("count", "3");

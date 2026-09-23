@@ -1,5 +1,19 @@
 import { useResize } from "src/hooks/useResize";
 import type { PanelPosition } from "src/types/PanelPosition";
+import { assertUnreachable } from "src/utils/assertUnreachable";
+
+// The handle lies along the panel's free edge.
+const toOrientation = (position: PanelPosition) => {
+  if (position === "bottom") {
+    return "horizontal";
+  }
+
+  if (position === "right") {
+    return "vertical";
+  }
+
+  return assertUnreachable(position);
+};
 
 type ResizeHandleProps = {
   position: PanelPosition;
@@ -20,7 +34,7 @@ export const ResizeHandle = (props: ResizeHandleProps) => {
       class="resize"
       data-position={props.position}
       role="separator"
-      aria-orientation={props.position === "bottom" ? "horizontal" : "vertical"}
+      aria-orientation={toOrientation(props.position)}
       aria-label="Resize devtools"
       aria-valuenow={props.size}
       tabIndex={0}

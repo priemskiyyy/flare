@@ -3,6 +3,14 @@ import { expect, test } from "vitest";
 
 import { describeContext } from "src/utils/describeContext";
 
+const destinationOf = (source: FlareDiagnosticEvent["source"]) => {
+  if (source !== "destination") {
+    return null;
+  }
+
+  return "primary";
+};
+
 const event = (
   type: string,
   context: unknown,
@@ -10,7 +18,7 @@ const event = (
 ): FlareDiagnosticEvent => ({
   source,
   type,
-  destination: source === "destination" ? "primary" : null,
+  destination: destinationOf(source),
   report: null,
   timestamp: 0,
   context,
@@ -47,16 +55,16 @@ test("summarises the fields Flare contexts carry", () => {
   expect(
     summary("destination outcome", {
       status: "skipped",
-      reason: "unavailable",
+      reason: "start-failed",
       losses: 0,
     }),
-  ).toBe("skipped · unavailable");
+  ).toBe("skipped · start-failed");
   expect(summary("report dropped", { reason: "stale-scope" }, "report")).toBe(
     "stale-scope",
   );
   expect(summary("identity changed", { generation: 3 }, "session")).toBe("#3");
   expect(summary("report buffered", { buffered: 2 })).toBe("2 buffered");
-  expect(summary("flushed", { timeoutMs: 1500 }, "runtime")).toBe("1500 ms");
+  expect(summary("flushed", { timeout: 1500 }, "runtime")).toBe("1500 ms");
   expect(summary("breadcrumb stale", { name: "opened" }, "session")).toBe(
     "opened",
   );
@@ -174,7 +182,6 @@ test("whatever did not verifiably arrive is an error", () => {
     "ERROR",
   );
   expect(kind("destination failed", null)).toBe("ERROR");
-  expect(kind("destination unavailable", null)).toBe("ERROR");
   expect(kind("ambient session failed", null)).toBe("ERROR");
   expect(kind("destination dispose failed", null)).toBe("ERROR");
 });

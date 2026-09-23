@@ -1,6 +1,7 @@
 import type { Accessor } from "solid-js";
 
 import type { PanelPosition } from "src/types/PanelPosition";
+import { assertUnreachable } from "src/utils/assertUnreachable";
 
 const MIN_SIZE = 240;
 const EDGE_MARGIN = 24;
@@ -16,18 +17,52 @@ export const useResize = ({
   size: Accessor<number>;
   onSizeChange: (size: number) => void;
 }) => {
-  const clamp = (value: number) => {
-    const available =
-      position() === "bottom" ? window.innerHeight : window.innerWidth;
+  const availableSpace = () => {
+    const current = position();
 
-    return Math.min(Math.max(value, MIN_SIZE), available - EDGE_MARGIN);
+    if (current === "bottom") {
+      return window.innerHeight;
+    }
+
+    if (current === "right") {
+      return window.innerWidth;
+    }
+
+    return assertUnreachable(current);
   };
 
+  const clamp = (value: number) =>
+    Math.min(Math.max(value, MIN_SIZE), availableSpace() - EDGE_MARGIN);
+
   // Dragging the handle away from its edge grows the panel on either axis.
-  const dragDistance = (start: PointerEvent, move: PointerEvent) =>
-    position() === "bottom"
-      ? start.clientY - move.clientY
-      : start.clientX - move.clientX;
+  const dragDistance = (start: PointerEvent, move: PointerEvent) => {
+    const current = position();
+
+    if (current === "bottom") {
+      return start.clientY - move.clientY;
+    }
+
+    if (current === "right") {
+      return start.clientX - move.clientX;
+    }
+
+    return assertUnreachable(current);
+  };
+
+  // The arrow that points away from the edge grows the panel.
+  const arrowKeys = () => {
+    const current = position();
+
+    if (current === "bottom") {
+      return { grow: "ArrowUp", shrink: "ArrowDown" };
+    }
+
+    if (current === "right") {
+      return { grow: "ArrowLeft", shrink: "ArrowRight" };
+    }
+
+    return assertUnreachable(current);
+  };
 
   const handlePointerDown = (
     event: PointerEvent & { currentTarget: HTMLElement },
@@ -50,8 +85,7 @@ export const useResize = ({
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    const grow = position() === "bottom" ? "ArrowUp" : "ArrowLeft";
-    const shrink = position() === "bottom" ? "ArrowDown" : "ArrowRight";
+    const { grow, shrink } = arrowKeys();
 
     if (event.key === grow) {
       event.preventDefault();

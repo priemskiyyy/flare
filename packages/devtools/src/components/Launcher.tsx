@@ -3,6 +3,15 @@ import type { FlareStatus } from "@priemskiyyy/flare";
 import { FlareIcon } from "src/components/FlareIcon";
 import { useAutoFocus } from "src/hooks/useAutoFocus";
 
+// An error the panel has not shown yet outranks the runtime status.
+const toDotState = (hasUnseenError: boolean, status: FlareStatus) => {
+  if (hasUnseenError) {
+    return "error";
+  }
+
+  return status.state;
+};
+
 type LauncherProps = {
   status: FlareStatus;
   hasUnseenError: boolean;
@@ -25,7 +34,7 @@ export const Launcher = (props: LauncherProps) => {
       <span>Flare</span>
       <span
         class="dot"
-        data-state={props.hasUnseenError ? "error" : props.status.state}
+        data-state={toDotState(props.hasUnseenError, props.status)}
       />
     </button>
   );

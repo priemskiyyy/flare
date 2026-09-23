@@ -11,8 +11,13 @@ export type RecordedEvent = Omit<FlareDiagnosticEvent, "context"> & {
 };
 
 // Clamp instead of throwing. A bad prop must not crash the host application.
-const clampLimit = (limit: number) =>
-  Number.isNaN(limit) ? 200 : Math.min(1_000, Math.max(1, Math.trunc(limit)));
+const clampLimit = (limit: number) => {
+  if (Number.isNaN(limit)) {
+    return 200;
+  }
+
+  return Math.min(1_000, Math.max(1, Math.trunc(limit)));
+};
 
 export class EventLog {
   #events: RecordedEvent[] = [];

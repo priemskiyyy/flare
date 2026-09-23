@@ -3,6 +3,20 @@ import type { FlareSnapshot } from "@priemskiyyy/flare";
 import { FlareIcon } from "src/components/FlareIcon";
 import { formatCounters } from "src/formatting/formatCounters";
 import type { PanelPosition } from "src/types/PanelPosition";
+import { assertUnreachable } from "src/utils/assertUnreachable";
+
+// The dock button names the edge it moves the panel to.
+const describeDock = (position: PanelPosition) => {
+  if (position === "bottom") {
+    return "Dock to the right";
+  }
+
+  if (position === "right") {
+    return "Dock to the bottom";
+  }
+
+  return assertUnreachable(position);
+};
 
 type PanelHeaderProps = {
   snapshot: FlareSnapshot;
@@ -28,9 +42,7 @@ export const PanelHeader = (props: PanelHeaderProps) => (
     <button
       type="button"
       class="icon-button"
-      aria-label={
-        props.position === "bottom" ? "Dock to the right" : "Dock to the bottom"
-      }
+      aria-label={describeDock(props.position)}
       onClick={() => props.onDock()}
     >
       <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
