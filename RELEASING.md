@@ -4,7 +4,7 @@ All packages share one version line. Each has its own GitHub release tag, and on
 
 The release tag uses the package name without its scope: `<name>-v<version>`, for example `flare-sentry-v0.1.0` for `@priemskiyyy/flare-sentry`. The publish workflow resolves the package from the tag, verifies its metadata and changelog entry, runs the test workflows, and publishes the verified tarball from `.artifacts/release/<package>/` with provenance after checking its checksum. It publishes the tarball that was tested, not a rebuild. Prereleases use the `next` dist-tag, and stable releases use `latest`.
 
-Publish `@priemskiyyy/flare` first, then the adapters and `@priemskiyyy/flare-trace`, then `@priemskiyyy/flare-react`, then `@priemskiyyy/flare-devtools`. Dependents declare the matching minor as a peer dependency, so a dependent published before the core cannot be installed.
+Publish `@priemskiyyy/flare` first, then the adapters and `@priemskiyyy/flare-trace`, then the bindings, `@priemskiyyy/flare-react`, `-vue`, `-solid` and `-svelte`, then `@priemskiyyy/flare-devtools`, which peers on all four. Dependents declare the matching minor as a peer dependency, so a dependent published before the core cannot be installed.
 
 ## Prepare a release
 
