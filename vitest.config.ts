@@ -1,4 +1,5 @@
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import solid from "vite-plugin-solid";
 import { defineConfig } from "vitest/config";
@@ -73,6 +74,18 @@ const exampleProject: TestProjectConfiguration = {
     environment: "jsdom",
   },
 };
+
+// Every adapter is an ordinary node project named after its folder, so a new
+// one is tested without being listed here.
+const adapterProjects = readdirSync(
+  new URL("./packages/adapters", import.meta.url),
+)
+  .filter((name) =>
+    existsSync(
+      new URL(`./packages/adapters/${name}/package.json`, import.meta.url),
+    ),
+  )
+  .map((name) => project("packages/adapters", name));
 
 export default defineConfig({
   test: {
@@ -158,11 +171,7 @@ export default defineConfig({
       },
       devtoolsProject,
       project("packages", "trace"),
-      project("packages/adapters", "console"),
-      project("packages/adapters", "http"),
-      project("packages/adapters", "sentry"),
-      project("packages/adapters", "bugsnag"),
-      project("packages/adapters", "crashlytics"),
+      ...adapterProjects,
       exampleProject,
     ],
   },
