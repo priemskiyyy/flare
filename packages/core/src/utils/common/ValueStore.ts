@@ -1,7 +1,7 @@
 import type { ObservableValue } from "src/types/ObservableValue";
-import { isolate } from "src/utils/common/errors";
+import { isolate } from "src/utils/common/isolate";
 
-export class ValueStore<TValue> implements ObservableValue<TValue> {
+export class ValueStore<TValue> {
   #snapshot;
   #listeners = new Set<() => void>();
 
