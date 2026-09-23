@@ -16,10 +16,10 @@ Create and start the Flare outside Vue, as early as your application allows, the
 
 ```ts
 import { Flare } from "@priemskiyyy/flare";
-import { consoleReporter } from "@priemskiyyy/flare-console";
+import { console } from "@priemskiyyy/flare-console";
 
 export const flare = new Flare({
-  destinations: { console: consoleReporter() },
+  destinations: { console: console() },
 });
 
 flare.start();
@@ -46,6 +46,8 @@ import { flare } from "./flare";
 ## Type it once
 
 Register your Flare, and every composable and the boundary know its destination names and its schema:
+
+<!-- snippet: fragment -->
 
 ```ts
 declare module "@priemskiyyy/flare-vue" {
