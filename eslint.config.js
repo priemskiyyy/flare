@@ -74,6 +74,7 @@ export default tseslint.config(
       "**/dist/**",
       "**/node_modules/**",
       "**/.svelte-kit/**",
+      "**/.expo/**",
       ".artifacts/**",
       "docs/.vitepress/cache/**",
       "docs/.vitepress/dist/**",
@@ -131,6 +132,7 @@ export default tseslint.config(
     files: [
       "packages/react/**/*.{ts,tsx}",
       "examples/react/src/**/*.{ts,tsx}",
+      "examples/expo/**/*.{ts,tsx}",
       "packages/devtools/src/react.ts",
       "packages/devtools/src/react.test.ts",
     ],

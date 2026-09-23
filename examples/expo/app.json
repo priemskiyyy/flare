@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Ledger",
+    "slug": "flare-ledger",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "platforms": ["ios", "android", "web"],
+    "ios": {
+      "bundleIdentifier": "dev.flare.example"
+    },
+    "android": {
+      "package": "dev.flare.example"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

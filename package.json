@@ -24,7 +24,7 @@
     "lint:docs": "tsc --noEmit -p docs/tsconfig.json",
     "verify:docs": "node scripts/verify-docs.mjs",
     "verify:snippets": "node scripts/verify-snippets.mjs",
-    "check:release": "pnpm check && pnpm lint:docs && pnpm verify:snippets && pnpm build:docs && pnpm verify:docs && pnpm test:package && pnpm verify:release"
+    "check:release": "pnpm check && pnpm lint:docs && pnpm verify:snippets && pnpm build:docs && pnpm verify:docs && pnpm test:package && pnpm verify:release && pnpm --filter example-expo build && pnpm --filter example-expo build:native"
   },
   "devDependencies": {
     "@bugsnag/js": "8.10.0",

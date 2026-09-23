@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "react"],
+    "baseUrl": ".",
+    "paths": {
+      "src/*": ["./src/*"],
+      "examples/shared/*": ["../shared/*"]
+    }
+  },
+  "include": ["*.ts", "*.tsx", "src/**/*.ts", "src/**/*.tsx"]
+}
