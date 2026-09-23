@@ -38,8 +38,11 @@ jobs:
   docs:
     needs: metadata
     uses: ./.github/workflows/docs.test.yml
+  services:
+    needs: metadata
+    uses: ./.github/workflows/services.test.yml
   publish:
-    needs: [metadata, packages, format, verified, docs]
+    needs: [metadata, packages, format, verified, docs, services]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: npm

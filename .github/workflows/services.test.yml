@@ -1,0 +1,63 @@
+name: services-test
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "packages/core/**"
+      - "packages/adapters/opentelemetry/**"
+      - "tests/services/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/actions/setup/**"
+      - ".github/workflows/services.test.yml"
+  push:
+    branches:
+      - "main"
+    paths:
+      - "packages/core/**"
+      - "packages/adapters/opentelemetry/**"
+      - "tests/services/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/actions/setup/**"
+      - ".github/workflows/services.test.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: services-test-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Start the OpenTelemetry collector
+        run: pnpm --filter test-services services:up
+
+      - name: Service tests
+        run: pnpm --filter test-services test
+
+      - name: Collector logs
+        if: failure()
+        run: docker compose -f tests/services/compose.yaml logs --no-color
+
+      - name: Stop the OpenTelemetry collector
+        if: always()
+        run: pnpm --filter test-services services:down

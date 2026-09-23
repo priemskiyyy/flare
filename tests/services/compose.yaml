@@ -1,0 +1,15 @@
+name: flare-services
+
+services:
+  collector:
+    image: otel/opentelemetry-collector-contrib:0.161.0
+    # The host's own user, so the file the collector writes can be read back
+    # on Linux, where a bind mount keeps the container's ownership.
+    user: "${FLARE_UID:-10001}"
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./collector/config.yaml:/etc/otelcol/config.yaml:ro
+      - ./.output:/output
+    ports:
+      - "127.0.0.1:54318:4318"
+      - "127.0.0.1:54313:13133"

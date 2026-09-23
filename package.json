@@ -15,6 +15,7 @@
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "test:providers": "pnpm --filter test-providers test",
+    "test:services": "pnpm --filter test-services services:up && pnpm --filter test-services test; status=$?; pnpm --filter test-services services:down; exit $status",
     "check": "pnpm build && pnpm lint:typescript && pnpm lint:eslint && pnpm lint:prettier && pnpm test:unit && pnpm test:providers",
     "test:package": "node scripts/verify-packages.mjs",
     "test:examples": "pnpm build && playwright test -c examples/playwright.config.ts",

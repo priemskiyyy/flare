@@ -1,0 +1,18 @@
+{
+  "name": "test-services",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run --config vitest.config.ts",
+    "services:up": "mkdir -p .output && FLARE_UID=$(id -u) docker compose up --wait --wait-timeout 120",
+    "services:down": "docker compose down --volumes --remove-orphans && rm -rf .output",
+    "lint:typescript": "tsc --noEmit -p ."
+  },
+  "devDependencies": {
+    "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/exporter-logs-otlp-http": "0.222.0",
+    "@opentelemetry/sdk-logs": "0.222.0",
+    "@priemskiyyy/flare": "workspace:*",
+    "@priemskiyyy/flare-opentelemetry": "workspace:*"
+  }
+}
