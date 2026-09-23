@@ -72,7 +72,7 @@ test("the panel observes a Flare without starting it or creating a report", asyn
 
   await macrotask();
 
-  expect(mock.openings).toEqual([]);
+  expect(mock.sessions).toEqual([]);
   expect(mock.submissions).toEqual([]);
   expect(flare.status.get()).toEqual({ state: "idle" });
   expect(panel().querySelector(".status")?.textContent).toBe("idle");
@@ -112,20 +112,15 @@ test("the panel follows the Flare as it changes, and never shows report content"
     "destination submit",
     "report accepted",
     "destination ready",
-    "destination starting",
     "started",
   ]);
   expect(text()).not.toContain(SECRET);
   devtools.unmount();
 });
 
-test("selecting a destination shows what it declared and narrows the timeline to it", async () => {
-  const first = createMockAdapter({ name: "mocked", flush: true });
-
-  const second = createMockAdapter({
-    name: "other",
-    capabilities: { messages: false },
-  });
+test("selecting a destination narrows the timeline to it, and all destinations brings everything back", async () => {
+  const first = createMockAdapter({ name: "mocked" });
+  const second = createMockAdapter({ name: "other" });
 
   const flare = new Flare({
     destinations: { primary: first.adapter, backup: second.adapter },
@@ -145,17 +140,6 @@ test("selecting a destination shows what it declared and narrows the timeline to
   fireEvent.click(view().getByRole("button", { name: /backup/ }));
   await macrotask();
 
-  const detail = view().getByRole("region", { name: "backup destination" });
-
-  expect(
-    within(detail).getByText("messages").nextElementSibling?.textContent,
-  ).toBe("no");
-  expect(
-    within(detail).getByText("evidence").nextElementSibling?.textContent,
-  ).toBe("sdk-call-returned");
-  expect(
-    within(detail).getByText("flush").nextElementSibling?.textContent,
-  ).toBe("none");
   expect(rows().length).toBeLessThan(everything);
   expect(
     rows().map((row) => row.querySelector(".event-destination")?.textContent),
@@ -163,7 +147,7 @@ test("selecting a destination shows what it declared and narrows the timeline to
   // What belongs to no destination still explains what this one saw.
   expect(rows().some((row) => row.textContent?.includes("started"))).toBe(true);
 
-  fireEvent.click(within(detail).getByRole("button", { name: "Close detail" }));
+  fireEvent.click(view().getByRole("button", { name: /All destinations/ }));
   await macrotask();
 
   expect(rows()).toHaveLength(everything);
@@ -258,17 +242,23 @@ test("a report that arrived does not light the launcher", async () => {
 test("pausing stops recording, resuming continues it, clearing forgets everything, and none of it touches the Flare", async () => {
   const { mock, flare } = create();
 
-  const { devtools, view, text, rows } = mountDevtools({
+  const { devtools, view, text, rows, types } = mountDevtools({
     flare,
     initialIsOpen: true,
     maxEvents: 3,
   });
 
   flare.start();
+  flare.user({ id: "ada" });
+  flare.user({ id: "grace" });
   await macrotask();
 
-  // Three is the limit, so nothing earlier than the last three events is left.
-  expect(rows()).toHaveLength(3);
+  // Three is the limit, so the oldest of four events is gone.
+  expect(types()).toEqual([
+    "identity changed",
+    "identity changed",
+    "destination ready",
+  ]);
 
   fireEvent.click(view().getByRole("button", { name: "Pause" }));
   flare.capture(new Error("while paused"));
@@ -370,7 +360,11 @@ test("setFlare follows another Flare, history survives a remount, and mounting t
   const recorded = rows().length;
 
   expect(() => devtools.mount(host)).toThrow(
-    "Flare devtools are already mounted. Call unmount() first.",
+    expect.objectContaining({
+      name: "FlareError",
+      code: "INVALID_CONFIGURATION",
+      message: "Flare devtools are already mounted. Call unmount() first.",
+    }),
   );
 
   devtools.setFlare(replacement.flare);

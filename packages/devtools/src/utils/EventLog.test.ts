@@ -23,7 +23,7 @@ test("keeps the newest events first within a clamped limit and notifies once per
     notifications += 1;
   });
 
-  log.add(event("destination starting"));
+  log.add(event("destination failed"));
   log.add(event("destination ready"));
   expect(log.get().map((entry) => entry.type)).toEqual(["destination ready"]);
   expect(notifications).toBe(0);

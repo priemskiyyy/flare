@@ -14,9 +14,9 @@ test("a destination's line names its adapter and status, and its queues only whe
   expect(
     formatDestinationLine({
       adapter: "http",
-      status: { state: "starting" },
+      status: { state: "failed", error: new Error("init failed") },
       buffered: 2,
       inFlight: 1,
     }),
-  ).toBe("http · starting · 2 buffered · 1 in flight");
+  ).toBe("http · failed · 2 buffered · 1 in flight");
 });
