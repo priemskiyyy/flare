@@ -21,8 +21,14 @@ const stop = traceBreadcrumbs({
       name: "checkoutStarted",
       data: { cartId },
     }),
-    "page.viewed": ({ path }) =>
-      path.startsWith("/admin") ? null : { name: "pageViewed", data: { path } },
+    "page.viewed": ({ path }) => {
+      // Admin pages leave no trail.
+      if (path.startsWith("/admin")) {
+        return null;
+      }
+
+      return { name: "pageViewed", data: { path } };
+    },
   },
 });
 
@@ -54,6 +60,7 @@ const listeners = new Set<
 const source: TraceEventSource<Events> = {
   subscribe: (listener) => {
     listeners.add(listener);
+
     return () => {
       listeners.delete(listener);
     };
