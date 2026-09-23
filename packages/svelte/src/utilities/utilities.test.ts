@@ -58,7 +58,14 @@ const countListeners = (flare: ReturnType<typeof create>["flare"]) => {
 
 test("a utility used outside a provider fails with a message that names the provider", () => {
   expect(() => render(Status)).toThrow(
-    "Flare utilities must be used within a FlareProvider.",
+    expect.objectContaining({
+      name: "FlareError",
+      code: "INVALID_CONFIGURATION",
+      // Svelte appends the component stack to the message in development.
+      message: expect.stringContaining(
+        "Flare utilities must be used within a FlareProvider.",
+      ),
+    }),
   );
 });
 
@@ -82,12 +89,12 @@ test("observing is passive: mounting the provider and every status utility opens
 
   expect(view.container.textContent).toBe("idle/idle");
   expect(flare.status.get()).toEqual({ state: "idle" });
-  expect(mock.openings).toEqual([]);
+  expect(mock.sessions).toEqual([]);
   expect(mock.submissions).toEqual([]);
 });
 
 test("the status utilities follow the runtime and one destination, to ready and to failed", async () => {
-  const { flare } = create({ holdOpen: true });
+  const { flare } = create();
 
   const failing = create({
     onOpen: () => {
@@ -101,7 +108,7 @@ test("the status utilities follow the runtime and one destination, to ready and 
 
   flare.start();
   await tick();
-  expect(view.container.textContent).toBe("started/starting");
+  expect(view.container.textContent).toBe("started/ready");
 
   await view.rerender({ flare: failing.flare });
   failing.flare.start();
@@ -113,7 +120,9 @@ test("a destination name given as a getter is followed when it changes", async (
   const first = createMockAdapter();
 
   const second = createMockAdapter({
-    available: { available: false, reason: "not here" },
+    onOpen: () => {
+      throw new Error("not here");
+    },
   });
 
   const flare = new Flare({
@@ -131,7 +140,7 @@ test("a destination name given as a getter is followed when it changes", async (
   await view.rerender({ name: "backup" });
   await tick();
 
-  expect(view.container.textContent).toBe("unavailable");
+  expect(view.container.textContent).toBe("failed");
 });
 
 test("a status callback is told about later changes, and not about the value it started with", async () => {
@@ -151,10 +160,7 @@ test("a status callback is told about later changes, and not about the value it 
   await tick();
 
   expect(flareChanges).toEqual([{ state: "started" }]);
-  expect(destinationChanges.map((status) => status.state)).toEqual([
-    "starting",
-    "ready",
-  ]);
+  expect(destinationChanges.map((status) => status.state)).toEqual(["ready"]);
   expect(view.container.textContent).toBe("started");
 });
 

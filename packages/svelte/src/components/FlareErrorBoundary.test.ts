@@ -130,6 +130,13 @@ test("a boundary with nothing to catch renders its children and reports nothing"
 
 test("a boundary outside a provider fails with a message that names the provider", () => {
   expect(() => render(Orphan)).toThrow(
-    "FlareErrorBoundary must be used within a FlareProvider.",
+    expect.objectContaining({
+      name: "FlareError",
+      code: "INVALID_CONFIGURATION",
+      // Svelte appends the component stack to the message in development.
+      message: expect.stringContaining(
+        "FlareErrorBoundary must be used within a FlareProvider.",
+      ),
+    }),
   );
 });
