@@ -1,0 +1,61 @@
+{
+  "name": "@priemskiyyy/flare-datadog-react-native",
+  "version": "0.1.0",
+  "description": "Datadog RUM destination for flare on React Native: each exception is one RUM error recorded at its capture time, carrying the report's own attributes under flare, over the DdRum you inject.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/priemskiyyy/flare.git",
+    "directory": "packages/adapters/datadog-react-native"
+  },
+  "bugs": {
+    "url": "https://github.com/priemskiyyy/flare/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "lint:typescript": "tsc --noEmit -p .",
+    "lint:eslint": "eslint src",
+    "test:unit": "vitest run --root ../../.. --project datadog-react-native"
+  },
+  "peerDependencies": {
+    "@priemskiyyy/flare": ">=0.1.0 <0.2",
+    "@datadog/mobile-react-native": ">=3.0.0 <4"
+  },
+  "peerDependenciesMeta": {
+    "@datadog/mobile-react-native": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@priemskiyyy/flare": "workspace:*"
+  },
+  "keywords": [
+    "datadog",
+    "rum",
+    "error-tracking",
+    "error-reporting",
+    "react-native",
+    "typescript",
+    "flare",
+    "adapter"
+  ],
+  "homepage": "https://priemskiyyy.github.io/flare/"
+}
