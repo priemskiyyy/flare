@@ -31,10 +31,10 @@ Application-wide values that never change belong in `defaults`:
 
 ```ts
 import { Flare } from "@priemskiyyy/flare";
-import { consoleReporter } from "@priemskiyyy/flare-console";
+import { console } from "@priemskiyyy/flare-console";
 
 const flare = new Flare({
-  destinations: { console: consoleReporter() },
+  destinations: { console: console() },
   defaults: {
     tags: { release: "2.4.0" },
     contexts: { build: { commit: "a91b44e" } },
@@ -42,9 +42,11 @@ const flare = new Flare({
 });
 ```
 
+Defaults are checked when the Flare is constructed. One that fails the schema throws a `FlareError` with the code `INVALID_CONFIGURATION`, such as `Flare's defaults are invalid at tags.release.`
+
 ## Breadcrumbs
 
-Flare keeps the most recent 50 breadcrumbs and attaches them to each report. An event that happened earlier than the moment you record it can carry its own time:
+Flare keeps the most recent 50 breadcrumbs, or `privacy.limits.breadcrumbs`, and attaches them to each report. An event that happened earlier than the moment you record it can carry its own time:
 
 ```ts
 flare.breadcrumb(
@@ -62,11 +64,11 @@ Without a schema, every tag, context and breadcrumb name is accepted. Pass a sch
 
 ```ts
 import { Flare } from "@priemskiyyy/flare";
-import { consoleReporter } from "@priemskiyyy/flare-console";
+import { console } from "@priemskiyyy/flare-console";
 import { z } from "zod";
 
 const flare = new Flare({
-  destinations: { console: consoleReporter() },
+  destinations: { console: console() },
   schema: {
     tags: {
       area: z.enum(["checkout", "upload"]),
@@ -90,13 +92,14 @@ Call sites accept the schema's input type. Flare validates and transforms it onc
 
 ```ts
 import { Flare } from "@priemskiyyy/flare";
-import { consoleReporter } from "@priemskiyyy/flare-console";
+import { console } from "@priemskiyyy/flare-console";
 import { z } from "zod";
 
 const flare = new Flare({
-  destinations: { console: consoleReporter() },
+  destinations: { console: console() },
   schema: { tags: { attempt: z.string().transform(Number) } },
 });
+
 flare.tag("attempt", "2"); // The report carries the number 2.
 ```
 
