@@ -16,7 +16,7 @@ const create = (options: Parameters<typeof createMockAdapter>[0] = {}) => {
 const reports = (mock: ReturnType<typeof createMockAdapter>) =>
   mock.submissions.map((submission) => submission.report);
 
-test.each(["route", "destination"])(
+test.each(["defaults.to function", "destination"])(
   "a %s cannot rewrite exception data or losses seen by another destination",
   (callback) => {
     const writes: boolean[] = [];
@@ -55,12 +55,14 @@ test.each(["route", "destination"])(
     const flare = new Flare({
       destinations: { first: first.adapter, second: second.adapter },
       privacy: { limits: { messageLength: 3 } },
-      route: ({ report }) => {
-        if (callback === "route") {
-          rewrite(report);
-        }
+      defaults: {
+        to: ({ report }) => {
+          if (callback === "defaults.to function") {
+            rewrite(report);
+          }
 
-        return ["first", "second"];
+          return ["first", "second"];
+        },
       },
     });
 
@@ -178,8 +180,15 @@ test.each(["direct", "scope"])(
     flare.tag("owner", "ada");
     flare.breadcrumb("ada opened checkout");
 
-    const reporter =
-      source === "scope" ? flare.scope({ operation: "checkout" }) : flare;
+    const createReporter = () => {
+      if (source === "scope") {
+        return flare.scope({ operation: "checkout" });
+      }
+
+      return flare;
+    };
+
+    const reporter = createReporter();
 
     reporter.message("switch during intake");
     flare.message("next report");
@@ -275,7 +284,8 @@ test("an account switch clears what the previous account left behind, but not ap
     contexts: { device: { model: "x" } },
     breadcrumbs: [],
   });
-  expect(JSON.stringify(reports(mock)[0])).not.toContain("ada");
+  // The id is random hex, which can spell "ada" by chance.
+  expect(JSON.stringify({ ...reports(mock)[0], id: "" })).not.toContain("ada");
 });
 
 test("a scope created before an account switch is stale and adopts nobody", async () => {
@@ -438,7 +448,8 @@ test("a breadcrumb can carry the time it occurred, which is not always the time 
   ]);
 });
 
-test.each([Number.NaN, Number.POSITIVE_INFINITY, -1])(
+// 8.64e15 ms after the epoch is the last time a Date can hold.
+test.each([Number.NaN, Number.POSITIVE_INFINITY, -1, 8.64e15 + 1])(
   "an occurrence time of %s is not usable, so the breadcrumb is recorded as of now",
   (timestamp) => {
     const mock = createMockAdapter();
@@ -487,7 +498,8 @@ test("a breadcrumb that occurred before the current identity began is not kept",
     "grace-opened-editor",
     "grace-saved",
   ]);
-  expect(JSON.stringify(reports(mock)[0])).not.toContain("ada");
+  // The id is random hex, which can spell "ada" by chance.
+  expect(JSON.stringify({ ...reports(mock)[0], id: "" })).not.toContain("ada");
 });
 
 test("a breadcrumb recorded now is kept even when the wall clock steps backwards", () => {
