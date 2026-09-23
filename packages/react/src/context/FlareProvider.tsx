@@ -11,7 +11,7 @@ export type FlareProviderProps = PropsWithChildren<{
  * Publishes one Flare to the tree below, and does nothing else. The Flare
  * owns its own lifetime: whoever constructed it starts it and disposes it, so
  * mounting the provider starts no destination and unmounting it shuts none
- * down, not even an SDK Flare owns.
+ * down.
  *
  * @example
  * ```tsx

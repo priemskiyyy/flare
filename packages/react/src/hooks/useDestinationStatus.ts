@@ -11,10 +11,10 @@ const getServerDestinationStatus = (): DestinationStatus =>
   IDLE_DESTINATION_STATUS;
 
 /**
- * Observes one destination: `idle`, `starting`, `ready`, `unavailable`,
- * `failed` or `disposed`. `ready` means locally usable, not that a network is
- * reachable. It observes only, and never starts the destination. On the
- * server and the hydrating render it reads `idle`.
+ * Observes one destination: `idle`, `ready`, `failed` or `disposed`.
+ * `ready` means locally usable, not that a network is reachable. It observes
+ * only, and never starts the destination. On the server and the hydrating
+ * render it reads `idle`.
  *
  * @example
  * ```ts
