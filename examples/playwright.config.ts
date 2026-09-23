@@ -1,8 +1,17 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// `pnpm lint:typescript` typechecks the examples, so here they are only built.
+const preview = (name: string, port: number) => ({
+  command: `pnpm --filter example-${name} exec vite build && pnpm --filter example-${name} exec vite preview --host 127.0.0.1 --port ${port} --strictPort`,
+  cwd: "..",
+  url: `http://127.0.0.1:${port}`,
+  reuseExistingServer: process.env.CI === undefined,
+  timeout: 120_000,
+});
+
 export default defineConfig({
   testDir: ".",
-  testMatch: ["ledger.spec.ts"],
+  testMatch: ["ledger.spec.ts", "frameworks.spec.ts"],
   outputDir: "../.artifacts/example-results",
   fullyParallel: false,
   workers: 1,
@@ -16,12 +25,10 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [{ name: "chromium" }],
-  webServer: {
-    command:
-      "pnpm --filter example-react build && pnpm --filter example-react exec vite preview --host 127.0.0.1 --port 4390 --strictPort",
-    cwd: "..",
-    url: "http://127.0.0.1:4390",
-    reuseExistingServer: process.env.CI === undefined,
-    timeout: 120_000,
-  },
+  webServer: [
+    preview("react", 4390),
+    preview("vue", 4391),
+    preview("solid", 4392),
+    preview("svelte", 4393),
+  ],
 });

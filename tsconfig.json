@@ -22,7 +22,8 @@
     "vitest.config.ts",
     "docs/.vitepress/config.ts",
     "examples/playwright.config.ts",
-    "examples/ledger.spec.ts"
+    "examples/ledger.spec.ts",
+    "examples/frameworks.spec.ts"
   ],
   "exclude": ["**/node_modules", "**/dist", ".artifacts"]
 }
