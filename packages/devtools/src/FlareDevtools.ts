@@ -1,3 +1,4 @@
+import { FlareError } from "@priemskiyyy/flare";
 import { createComponent, createSignal } from "solid-js";
 import type { Accessor, Setter } from "solid-js";
 import { render } from "solid-js/web";
@@ -59,9 +60,10 @@ export class FlareDevtools {
   /** Renders into `element` through a shadow root and starts recording. Throws when already mounted. */
   mount = (element: HTMLElement) => {
     if (this.#dispose !== null) {
-      throw new Error(
-        "Flare devtools are already mounted. Call unmount() first.",
-      );
+      throw new FlareError({
+        code: "INVALID_CONFIGURATION",
+        message: "Flare devtools are already mounted. Call unmount() first.",
+      });
     }
 
     const root = element.shadowRoot ?? element.attachShadow({ mode: "open" });
