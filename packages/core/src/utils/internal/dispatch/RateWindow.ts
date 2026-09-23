@@ -15,7 +15,8 @@ export class RateWindow {
 
   /** `refused-first` marks the first refusal of a window, so it can be announced once. */
   admit = (now: number): "admitted" | "refused-first" | "refused" => {
-    if (now - this.#startedAt >= WINDOW_MS) {
+    // A clock that stepped back starts a new window rather than keep one shut.
+    if (now < this.#startedAt || now - this.#startedAt >= WINDOW_MS) {
       this.#startedAt = now;
       this.#count = 0;
     }
