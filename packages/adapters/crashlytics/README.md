@@ -2,7 +2,7 @@
 
 Record [Flare](../../core) error reports as non-fatal errors in Firebase Crashlytics on React Native. You inject the React Native Firebase module your application already uses, so this package imports none.
 
-Crashlytics can attach nothing to a single report from JavaScript. This reporter is deliberately limited to what is true: it records the error, lists everything else the report carried as a loss, and offers an opt-in ambient integration for the rest.
+Crashlytics can attach nothing to a single report from JavaScript. This adapter is deliberately limited to what is true: it records the error, lists everything else the report carried as a loss, and offers an opt-in ambient integration for the rest.
 
 ## Installation
 
@@ -38,7 +38,7 @@ flare.capture(new Error("Upload failed"));
 | `sdk`     | required | The `@react-native-firebase/crashlytics` module, passed as its namespace. The modular API of version 22 or newer. |
 | `ambient` | all off  | `{ user, tags, contexts, breadcrumbs }`. The only way any of these reach Crashlytics. See below.                  |
 
-There is no ownership option. Crashlytics is initialized by the native Firebase SDK, never from JavaScript, so Flare neither starts nor stops it.
+Crashlytics is initialized by the native Firebase SDK, never from JavaScript, so Flare neither starts nor stops it.
 
 ## How a report is mapped
 
@@ -53,7 +53,7 @@ There is no ownership option. Crashlytics is initialized by the native Firebase 
 
 Losses, each with the reason `unsupported`: `identity.user`, `tags`, `contexts`, `breadcrumbs`, `operation`, `exception.aggregated`, and `level` when it is not `error`, since whatever is recorded is a non-fatal. A report that carries none of these has no losses.
 
-The reporter never sets the global user id or keys around a `recordError` call to imitate per-report data. That state is global, so it would leak into every other report and into crashes Crashlytics captures by itself. `capabilities.eventLocal` is `false` for all four fields, and the losses stay listed even with the ambient integration on, because what Crashlytics attaches then is its global state, not this report's.
+The adapter never sets the global user id or keys around a `recordError` call to imitate per-report data. That state is global, so it would leak into every other report and into crashes Crashlytics captures by itself. The losses stay listed even with the ambient integration on, because what Crashlytics attaches then is its global state, not this report's.
 
 ## Ambient integration
 
@@ -68,7 +68,7 @@ The reporter never sets the global user id or keys around a `recordError` call t
 
 Limits, which are Crashlytics' own:
 
-- At most 64 custom keys. The reporter writes the first 64 distinct keys it is given, tags before contexts, and ignores the rest.
+- At most 64 custom keys. The adapter writes the first 64 distinct keys it is given, tags before contexts, and ignores the rest.
 - A key cannot be deleted. A removed tag or context is written as an empty string, and it keeps its slot among the 64.
 - A value, and a log line, is cut at 1024 characters.
 - The user id cannot be cleared. Signing out writes an empty string.
@@ -78,23 +78,23 @@ These limits were checked against the installed type declarations and Firebase's
 
 An account change blanks every key the previous account left, because the core clears session tags and contexts when the identity changes. Disposing blanks the user id and every key Flare wrote, and leaves what your application set itself.
 
-With `user` on, Crashlytics attaches the mirrored user id to every non-fatal natively. A report that belongs to someone else, such as one captured under a previous account and delivered after a switch, or one given its own `user`, would be recorded under the wrong account. The reporter skips it as `identity-mismatch` instead. Without `user` on, Flare wrote no user id, and every report is recorded.
+With `user` on, Crashlytics attaches the mirrored user id to every non-fatal natively. A report that belongs to someone else, such as one captured under a previous account and delivered after a switch, or one given its own `user`, would be recorded under the wrong account. The adapter skips it as `identity-mismatch` instead. Without `user` on, Flare cannot read the user id your application set, so the account stands in for it: a report with a user whose account changed since it was captured is skipped as `identity-mismatch`, and every other report is recorded.
 
 ## Behavior
 
 - Platforms and versions: React Native on iOS and Android, with `@react-native-firebase/crashlytics` 22 to 26. There is no web SDK. The module is an optional peer dependency and is typed structurally through `CrashlyticsLike`.
 - Evidence is `sdk-call-returned`: `recordError` returned. There is no event id and no callback.
-- Queue and offline: a non-fatal is stored on the device and usually sent the next time the application starts. `queue` is `sdk-persistent`, and retry belongs to Crashlytics.
-- There is no `flush`. `sendUnsentReports` enqueues reports for upload when automatic collection is disabled and acknowledges nothing, so it is not a flush, and the reporter does not call it. `flare.flush()` reports this destination as `unsupported`.
-- Collection is opt-in capable: with `setCrashlyticsCollectionEnabled(false)`, nothing recorded is ever sent, and the receipt cannot know. That is why `filtering` is `provider-hooks`.
+- Queue and offline: a non-fatal is stored on the device and usually sent the next time the application starts. Retry belongs to Crashlytics.
+- There is no `flush`. `sendUnsentReports` enqueues reports for upload when automatic collection is disabled and acknowledges nothing, so it is not a flush, and the adapter does not call it. `flare.flush()` reports this destination as `unsupported`.
+- Collection can be turned off: with `setCrashlyticsCollectionEnabled(false)`, nothing recorded is ever sent, and the receipt cannot know.
 - Automatic capture is Crashlytics' own. Native crashes, and the unhandled JavaScript errors React Native Firebase reports by itself, never pass through Flare. To avoid reporting one JavaScript error twice, give each source one owner.
 - Privacy: the Error Flare hands over was rebuilt from the redacted report, and mirrored values were redacted, scrubbed and bounded by the core. What Crashlytics collects on its own, such as device state and Analytics breadcrumbs, is outside that guarantee.
-- The Crashlytics module is one process-wide instance. Registering it under two destination names is rejected when the `Flare` is constructed.
+- The Crashlytics module is one process-wide instance. Register it under one destination name: two destinations over the same module record every error twice.
 - `native` is the Crashlytics instance from `getCrashlytics()`, obtained when the destination opens, for everything Flare does not wrap, such as `setCrashlyticsCollectionEnabled`.
 
 ## Tests
 
-The tests run against an in-process fake of the modular API that models the one fact this reporter is built around: `recordError` attaches whatever is global at that moment. A typecheck-only contract file assigns the real `@react-native-firebase/crashlytics` module to `CrashlyticsLike`, so a change in its signatures fails the build. Nothing here runs on a device or reaches Firebase: on-device storage, upload, the key and log limits, and symbolication are Crashlytics' and are not covered.
+The tests run against an in-process fake of the modular API that models the one fact this adapter is built around: `recordError` attaches whatever is global at that moment. A typecheck-only contract file assigns the real `@react-native-firebase/crashlytics` module to `CrashlyticsLike`, so a change in its signatures fails the build. Nothing here runs on a device or reaches Firebase: on-device storage, upload, the key and log limits, and symbolication are Crashlytics' and are not covered.
 
 ## License
 
