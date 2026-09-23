@@ -13,6 +13,3 @@ export const RESERVED_SECTIONS: readonly string[] = [
   FLARE_SECTION,
   AGGREGATED_SECTION,
 ];
-
-/** Stamped on every mirrored breadcrumb, because Bugsnag cannot clear them on an account change. */
-export const GENERATION_KEY = "flare.generation";
