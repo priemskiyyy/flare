@@ -72,6 +72,9 @@ const exampleProject: TestProjectConfiguration = {
     name: "example-react",
     include: ["examples/react/src/**/*.test.{ts,tsx}"],
     environment: "jsdom",
+    // Node would load the icons with their own React; through Vite they share
+    // the deduplicated one, as CI's React version swap needs.
+    server: { deps: { inline: ["@phosphor-icons/react"] } },
   },
 };
 
