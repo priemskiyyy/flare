@@ -70,6 +70,22 @@ test("an explicit dedupe key holds per destination and per identity", () => {
   ).toEqual(["ada", "grace"]);
 });
 
+test("a destination forgets an explicit dedupe key only once 100 newer ones push it out", () => {
+  const mock = createMockAdapter();
+  const flare = new Flare({ destinations: { primary: mock.adapter } });
+
+  flare.start();
+
+  for (let index = 0; index <= 100; index += 1) {
+    flare.message("Sync failed", { dedupe: { key: `sync-${index}` } });
+  }
+
+  flare.message("Sync failed", { dedupe: { key: "sync-1" } });
+  flare.message("Sync failed", { dedupe: { key: "sync-0" } });
+
+  expect(mock.submissions).toHaveLength(102);
+});
+
 test("a capture made from inside an adapter's submit is refused, so a feedback loop cannot start", async () => {
   const receipts: Array<
     ReturnType<
@@ -117,7 +133,7 @@ test("an error storm is cut off per minute, announced once, and let through agai
 
   const flare = new Flare({
     destinations: { primary: mock.adapter },
-    limits: { reportsPerMinute: 3 },
+    rateLimits: { perMinute: 3 },
   });
 
   flare.start();
