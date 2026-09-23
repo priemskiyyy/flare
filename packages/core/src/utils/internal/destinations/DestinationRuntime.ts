@@ -1,26 +1,38 @@
+import type { AmbientReporterContext } from "src/types/AmbientReporterContext";
 import type { AmbientSnapshot } from "src/types/AmbientSnapshot";
 import type { Breadcrumb } from "src/types/Breadcrumb";
 import type { DestinationFlushResult } from "src/types/DestinationFlushResult";
 import type { DestinationOutcome } from "src/types/DestinationOutcome";
 import type { DestinationStatus } from "src/types/DestinationStatus";
-import type { FlareDiagnosticEvent } from "src/types/FlareDiagnosticEvent";
 import type { ObservableValue } from "src/types/ObservableValue";
 import type { ReporterAdapter } from "src/types/ReporterAdapter";
-import type { ReporterCapabilities } from "src/types/ReporterCapabilities";
 import type { ReporterSession } from "src/types/ReporterSession";
 import type { SanitizedReport } from "src/types/SanitizedReport";
+import type { SubmissionResult } from "src/types/SubmissionResult";
 import { assertUnreachable } from "src/utils/common/assertUnreachable";
-import { deferred } from "src/utils/common/deferred";
+import { createDeferred } from "src/utils/common/createDeferred";
 import { isPromiseLike } from "src/utils/common/isPromiseLike";
 import { ValueStore } from "src/utils/common/ValueStore";
-import { parseSubmissionResult } from "src/utils/internal/destinations/parseSubmissionResult";
+import {
+  DISPOSED_DESTINATION_STATUS,
+  IDLE_DESTINATION_STATUS,
+  READY_DESTINATION_STATUS,
+} from "src/utils/constants/status";
+import { FlareError } from "src/utils/FlareError";
+import { copyFlushResult } from "src/utils/internal/destinations/copyFlushResult";
+import { copySubmissionOutcome } from "src/utils/internal/destinations/copySubmissionOutcome";
 import { unrefTimer } from "src/utils/internal/destinations/unrefTimer";
+import type { RecordedEvent } from "src/utils/internal/diagnostics/Diagnostics";
 import { describeOutcome } from "src/utils/internal/diagnostics/describeOutcome";
+import { DedupeIndex } from "src/utils/internal/dispatch/DedupeIndex";
 
 type Entry = {
   report: SanitizedReport;
   settle: (outcome: DestinationOutcome) => void;
 };
+
+/** What identifies a capture for dedupe. It is read on arrival and never retained. */
+type Occurrence = { key: string | null; thrown: unknown };
 
 type Buffered = Entry & { acceptedAt: number };
 
@@ -28,62 +40,106 @@ type Flight = {
   entry: Entry;
   controller: AbortController;
   timer: ReturnType<typeof setTimeout>;
-  done: ReturnType<typeof deferred<void>>;
+  done: ReturnType<typeof createDeferred<void>>;
+};
+
+/** A session, and the two fields read from it once, when it was opened. */
+type OpenedSession<TNative> = {
+  session: ReporterSession<TNative>;
+  native: TNative;
+  ambient: AmbientReporterContext | undefined;
 };
 
 type State<TNative> =
   | Exclude<DestinationStatus, { state: "ready" }>
-  | { state: "ready"; session: ReporterSession<TNative> };
-
-const READY_STATUS: DestinationStatus = Object.freeze({ state: "ready" });
+  | ({ state: "ready" } & OpenedSession<TNative>);
 
 type Options<TNative> = {
   name: string;
   adapter: ReporterAdapter<TNative>;
-  buffer: { maxReports: number; maxAgeMs: number };
-  deadlineMs: number;
+  buffer: { capacity: number; maxAge: number };
+  dedupe: { window: number; maxKeys: number };
+  timeout: number;
   now: () => number;
   currentGeneration: () => number;
   readAmbient: () => AmbientSnapshot;
   /** Brackets the synchronous part of `submit`, so a capture made from inside it can be refused. */
   submitDepth: { enter: () => void; exit: () => void };
-  record: (event: Omit<FlareDiagnosticEvent, "timestamp">) => void;
+  record: (event: RecordedEvent) => void;
   changed: () => void;
 };
 
 const TIMED_OUT = Symbol("timed out");
 
-/**
- * Owns one destination: its session, its startup buffer, the deadline of
- * every submission and its disposal. Whatever the adapter does, every entry
- * accepted here is settled exactly once.
- */
-export class DestinationRuntime<TNative = unknown> {
-  readonly capabilities: ReporterCapabilities;
-  #options: Options<TNative>;
-  #state = new ValueStore<State<TNative>>(Object.freeze({ state: "idle" }));
-  #buffer: Buffered[] = [];
-  #expiry: ReturnType<typeof setTimeout> | null = null;
-  #flights = new Set<Flight>();
+type Answer =
+  | { kind: "pending"; promise: PromiseLike<SubmissionResult> }
+  | { kind: "result"; result: SubmissionResult };
 
-  constructor(options: Options<TNative>) {
-    this.#options = options;
+// Telling a promise from a result reads the answer's `then`, which is adapter
+// code too, so it runs where the submission's failures are contained.
+const getSubmissionAnswer = (
+  answer: SubmissionResult | PromiseLike<SubmissionResult>,
+): Answer => {
+  if (isPromiseLike(answer)) {
+    return { kind: "pending", promise: answer };
+  }
 
-    const { eventLocal, ...capabilities } = options.adapter.capabilities;
+  return { kind: "result", result: answer };
+};
 
-    this.capabilities = Object.freeze({
-      ...capabilities,
-      eventLocal: Object.freeze({ ...eventLocal }),
+// What `open` returned is adapter code: its fields are read once, while a
+// failure is still a failed start, and never again where nothing contains them.
+const getOpenedSession = <TNative>(
+  session: ReporterSession<TNative>,
+): OpenedSession<TNative> => {
+  if (
+    typeof session !== "object" ||
+    session === null ||
+    typeof session.submit !== "function"
+  ) {
+    throw new FlareError({
+      code: "INVALID_ANSWER",
+      message: "The adapter's open returned no session with a submit function.",
     });
   }
 
-  status: ObservableValue<DestinationStatus> = {
-    get: () => {
-      const current = this.#state.get();
+  return { session, native: session.native, ambient: session.ambient };
+};
 
-      // The session is private. Observers receive only the public status.
-      return current.state === "ready" ? READY_STATUS : current;
-    },
+/**
+ * Owns one destination: its session, what it has already been sent, its
+ * startup buffer, the deadline of every submission and its disposal.
+ * Whatever the adapter does, every entry accepted here is settled exactly
+ * once, and a disposed session is never called again.
+ */
+export class DestinationRuntime<TNative = unknown> {
+  #options: Options<TNative>;
+  #state = new ValueStore<State<TNative>>(IDLE_DESTINATION_STATUS);
+  #dedupe: DedupeIndex;
+  #buffer: Buffered[] = [];
+  #expiry: ReturnType<typeof setTimeout> | null = null;
+  #flights = new Set<Flight>();
+  #opening = false;
+
+  constructor(options: Options<TNative>) {
+    this.#options = options;
+    this.#dedupe = new DedupeIndex(options.dedupe);
+  }
+
+  /** What Flare itself reads, so replacing a method on `status` misleads no one else. */
+  get currentStatus(): DestinationStatus {
+    const current = this.#state.get();
+
+    // The session is private. Observers receive only the public status.
+    if (current.state === "ready") {
+      return READY_DESTINATION_STATUS;
+    }
+
+    return current;
+  }
+
+  status: ObservableValue<DestinationStatus> = {
+    get: () => this.currentStatus,
     subscribe: this.#state.subscribe,
   };
 
@@ -91,11 +147,10 @@ export class DestinationRuntime<TNative = unknown> {
     return this.#options.name;
   }
 
-  get adapter() {
-    return this.#options.adapter;
+  get adapterName() {
+    return this.#options.adapter.name;
   }
 
-  /** The provider handle, or `null` unless the destination is ready. Reading it starts nothing. */
   get native() {
     const current = this.#state.get();
 
@@ -103,7 +158,7 @@ export class DestinationRuntime<TNative = unknown> {
       return null;
     }
 
-    return current.session.native;
+    return current.native;
   }
 
   get buffered() {
@@ -114,89 +169,60 @@ export class DestinationRuntime<TNative = unknown> {
     return this.#flights.size;
   }
 
-  /** Opens the adapter. A second call does nothing unless the first start failed. */
+  /** Opens the adapter. A second call does nothing unless the first `open` threw. */
   start = () => {
     const current = this.#state.get();
 
-    if (current.state !== "idle" && current.state !== "failed") {
+    // Called again from inside `open`, which the outer call is still finishing.
+    if (this.#opening) {
       return;
     }
 
-    // Reserve the start before any observer or availability probe can reenter.
-    const attempt = { state: "starting" } as const;
-
-    if (!this.#become(attempt)) {
+    if (current.state === "ready" || current.state === "disposed") {
       return;
     }
 
-    const availability = this.#probe();
+    this.#opening = true;
 
-    if (this.#state.get() !== attempt) {
-      return;
-    }
+    const opened = this.#open();
 
-    if (!availability.available) {
-      this.#become({ state: "unavailable", reason: availability.reason });
-      this.#drain({ status: "skipped", reason: "unavailable" });
+    this.#opening = false;
+
+    if (opened.kind === "failed") {
+      this.#fail(current, opened.error);
 
       return;
     }
 
-    try {
-      const opened = this.#options.adapter.open({ destination: this.name });
+    if (opened.kind === "opened") {
+      this.#ready(current, opened.session);
 
-      if (isPromiseLike(opened)) {
-        Promise.resolve(opened).then(
-          (session) => this.#ready(attempt, session),
-          (error: unknown) => this.#fail(attempt, error),
-        );
-
-        return;
-      }
-
-      this.#ready(attempt, opened);
-    } catch (error) {
-      this.#fail(attempt, error);
+      return;
     }
+
+    assertUnreachable(opened);
   };
 
-  accept = (entry: Entry) => {
-    const current = this.#state.get();
+  /** Takes one report, unless this destination was already sent the same occurrence. */
+  accept = (entry: Entry, { key, thrown }: Occurrence) => {
+    const duplicate = this.#dedupe.isDuplicate({
+      generation: entry.report.identity.generation,
+      key,
+      thrown,
+      now: this.#options.now(),
+    });
 
-    if (current.state === "disposed") {
-      this.#settle(entry, { status: "dropped", reason: "disposed" });
-
-      return;
-    }
-
-    if (current.state === "unavailable") {
-      this.#settle(entry, { status: "skipped", reason: "unavailable" });
-
-      return;
-    }
-
-    if (current.state === "ready") {
-      this.#submit(current.session, entry);
+    if (duplicate) {
+      this.#settle(entry, { status: "dropped", reason: "deduped" });
 
       return;
     }
 
-    if (
-      current.state === "idle" ||
-      current.state === "starting" ||
-      current.state === "failed"
-    ) {
-      this.#hold(entry);
-
-      return;
-    }
-
-    assertUnreachable(current);
+    this.#deliver(entry);
   };
 
-  /** Waits for submissions accepted before the call, then for the provider's own flush. */
   flush = async (
-    timeoutMs: number,
+    timeout: number,
   ): Promise<{ drained: boolean; boundary: DestinationFlushResult }> => {
     const current = this.#state.get();
 
@@ -205,14 +231,14 @@ export class DestinationRuntime<TNative = unknown> {
     }
 
     const controller = new AbortController();
-    const timeout = deferred<typeof TIMED_OUT>();
+    const expiry = createDeferred<typeof TIMED_OUT>();
+    const startedAt = this.#options.now();
 
+    // Referenced, unlike the other timers: its caller is waiting for it.
     const timer = setTimeout(() => {
       controller.abort();
-      timeout.resolve(TIMED_OUT);
-    }, timeoutMs);
-
-    unrefTimer(timer);
+      expiry.resolve(TIMED_OUT);
+    }, timeout);
 
     try {
       // Later submissions are not in this list, so they cannot extend the wait.
@@ -220,7 +246,7 @@ export class DestinationRuntime<TNative = unknown> {
 
       const drained = await Promise.race([
         Promise.all(accepted),
-        timeout.promise,
+        expiry.promise,
       ]);
 
       if (drained === TIMED_OUT) {
@@ -231,22 +257,28 @@ export class DestinationRuntime<TNative = unknown> {
         return { drained: true, boundary: { status: "not-ready" } };
       }
 
-      const { flush } = current.session;
+      const { session } = current;
 
-      if (typeof flush !== "function") {
+      if (typeof session.flush !== "function") {
         return { drained: true, boundary: { status: "unsupported" } };
       }
 
+      // The provider gets what is left of the deadline, not all of it again.
+      const remaining = Math.max(
+        0,
+        timeout - (this.#options.now() - startedAt),
+      );
+
       const boundary = await Promise.race([
-        flush.call(current.session, { timeoutMs, signal: controller.signal }),
-        timeout.promise,
+        session.flush({ timeout: remaining, signal: controller.signal }),
+        expiry.promise,
       ]);
 
       if (boundary === TIMED_OUT) {
         return { drained: true, boundary: { status: "timeout" } };
       }
 
-      return { drained: true, boundary };
+      return { drained: true, boundary: copyFlushResult(boundary) };
     } catch (error) {
       return { drained: true, boundary: { status: "failed", error } };
     } finally {
@@ -255,37 +287,25 @@ export class DestinationRuntime<TNative = unknown> {
   };
 
   syncAmbient = (snapshot: AmbientSnapshot) => {
-    const current = this.#state.get();
+    const ambient = this.#readyAmbient();
 
-    if (current.state !== "ready") {
+    if (ambient === undefined) {
       return;
     }
 
-    this.#contain("ambient session failed", () => {
-      const ambient = current.session.ambient;
-      const session = ambient?.session;
-
-      if (typeof session === "function") {
-        return session.call(ambient, snapshot);
-      }
-    });
+    this.#contain("ambient session failed", () => ambient.session(snapshot));
   };
 
   ambientBreadcrumb = (breadcrumb: Breadcrumb) => {
-    const current = this.#state.get();
+    const ambient = this.#readyAmbient();
 
-    if (current.state !== "ready") {
+    if (ambient === undefined) {
       return;
     }
 
-    this.#contain("ambient breadcrumb failed", () => {
-      const ambient = current.session.ambient;
-      const push = ambient?.breadcrumb;
-
-      if (typeof push === "function") {
-        return push.call(ambient, breadcrumb);
-      }
-    });
+    this.#contain("ambient breadcrumb failed", () =>
+      ambient.breadcrumb(breadcrumb),
+    );
   };
 
   dispose = () => {
@@ -295,8 +315,15 @@ export class DestinationRuntime<TNative = unknown> {
       return;
     }
 
-    this.#become({ state: "disposed" });
-    this.#drain({ status: "dropped", reason: "disposed" });
+    this.#become(DISPOSED_DESTINATION_STATUS);
+
+    const waiting = this.#buffer.splice(0);
+
+    this.#scheduleExpiry();
+
+    for (const entry of waiting) {
+      this.#settle(entry, { status: "dropped", reason: "disposed" });
+    }
 
     for (const flight of [...this.#flights]) {
       flight.controller.abort();
@@ -308,46 +335,9 @@ export class DestinationRuntime<TNative = unknown> {
     }
   };
 
-  #probe() {
-    try {
-      return this.#options.adapter.available();
-    } catch {
-      return {
-        available: false,
-        reason: "The availability probe threw.",
-      } as const;
-    }
-  }
-
-  #ready(attempt: object, session: ReporterSession<TNative>) {
-    const current = this.#state.get();
-
-    // Disposed, or restarted, while this session was opening: it has no owner.
-    if (current !== attempt) {
-      this.#release(session);
-
-      return;
-    }
-
-    if (!this.#become({ state: "ready", session })) {
-      return;
-    }
-
-    this.syncAmbient(this.#options.readAmbient());
-
-    const waiting = this.#buffer.splice(0);
-
-    this.#scheduleExpiry();
-
-    for (const entry of waiting) {
-      this.accept(entry);
-    }
-  }
-
-  #fail(attempt: object, error: unknown) {
-    const current = this.#state.get();
-
-    if (current !== attempt) {
+  #fail(from: State<TNative>, error: unknown) {
+    // Disposed from inside `open`: disposal stands.
+    if (this.#state.get() !== from) {
       return;
     }
 
@@ -355,29 +345,111 @@ export class DestinationRuntime<TNative = unknown> {
     this.#become({ state: "failed", error });
   }
 
+  #open():
+    | { kind: "opened"; session: OpenedSession<TNative> }
+    | { kind: "failed"; error: unknown } {
+    try {
+      return {
+        kind: "opened",
+        session: getOpenedSession(this.#options.adapter.open()),
+      };
+    } catch (error) {
+      return { kind: "failed", error };
+    }
+  }
+
+  #ready(from: State<TNative>, opened: OpenedSession<TNative>) {
+    // Disposed from inside `open`: this session has no owner.
+    if (this.#state.get() !== from) {
+      this.#release(opened.session);
+
+      return;
+    }
+
+    // An observer that disposes from the ready notification empties the
+    // buffer, and every call below checks the state first.
+    this.#become({ state: "ready", ...opened });
+    this.syncAmbient(this.#options.readAmbient());
+    this.#submitBuffered();
+  }
+
+  // Oldest first. A report captured while these wait, from the ready
+  // notification for example, joins the end instead of overtaking them.
+  #submitBuffered() {
+    let entry = this.#buffer.shift();
+
+    while (entry !== undefined) {
+      const current = this.#state.get();
+
+      if (current.state !== "ready") {
+        this.#buffer.unshift(entry);
+
+        break;
+      }
+
+      this.#submit(current.session, entry);
+      entry = this.#buffer.shift();
+    }
+
+    this.#scheduleExpiry();
+  }
+
+  #deliver(entry: Entry) {
+    const current = this.#state.get();
+
+    if (current.state === "ready" && this.#buffer.length > 0) {
+      this.#hold(entry);
+
+      return;
+    }
+
+    if (current.state === "ready") {
+      this.#submit(current.session, entry);
+
+      return;
+    }
+
+    if (current.state === "disposed") {
+      this.#settle(entry, { status: "dropped", reason: "disposed" });
+
+      return;
+    }
+
+    if (current.state === "idle" || current.state === "failed") {
+      this.#hold(entry);
+
+      return;
+    }
+
+    assertUnreachable(current);
+  }
+
   #become(state: State<TNative>) {
     this.#state.set(Object.freeze(state));
 
+    // An observer has already moved on: announce only what still stands.
     if (this.#state.get() !== state) {
-      return false;
+      return;
     }
 
-    this.#options.record({
-      source: "destination",
-      type: `destination ${state.state}`,
-      destination: this.name,
-      report: null,
-      context: null,
-    });
+    this.#record(`destination ${state.state}`);
     this.#options.changed();
+  }
 
-    return this.#state.get() === state;
+  #readyAmbient() {
+    const current = this.#state.get();
+
+    if (current.state !== "ready") {
+      return undefined;
+    }
+
+    return current.ambient;
   }
 
   #hold(entry: Entry) {
     this.#buffer.push({ ...entry, acceptedAt: this.#options.now() });
 
-    if (this.#buffer.length > this.#options.buffer.maxReports) {
+    if (this.#buffer.length > this.#options.buffer.capacity) {
       const pushedOut = this.#buffer.shift();
 
       if (pushedOut !== undefined) {
@@ -388,25 +460,11 @@ export class DestinationRuntime<TNative = unknown> {
       }
     }
 
-    this.#options.record({
-      source: "destination",
-      type: "report buffered",
-      destination: this.name,
-      report: entry.report.id,
-      context: { buffered: this.#buffer.length },
+    this.#record("report buffered", entry.report.id, {
+      buffered: this.#buffer.length,
     });
     this.#scheduleExpiry();
     this.#options.changed();
-  }
-
-  #drain(outcome: DestinationOutcome) {
-    const waiting = this.#buffer.splice(0);
-
-    this.#scheduleExpiry();
-
-    for (const entry of waiting) {
-      this.#settle(entry, outcome);
-    }
   }
 
   // One timer, always for the oldest report, so an unstarted destination still settles its receipts.
@@ -423,7 +481,7 @@ export class DestinationRuntime<TNative = unknown> {
     }
 
     const { now, buffer } = this.#options;
-    const delay = Math.max(0, oldest.acceptedAt + buffer.maxAgeMs - now());
+    const delay = Math.max(0, oldest.acceptedAt + buffer.maxAge - now());
 
     this.#expiry = setTimeout(this.#expire, delay);
     unrefTimer(this.#expiry);
@@ -431,16 +489,20 @@ export class DestinationRuntime<TNative = unknown> {
 
   #expire = () => {
     const { now, buffer } = this.#options;
+    const outcome = this.#expiredOutcome();
+    const time = now();
 
-    const outcome: DestinationOutcome =
-      this.#state.get().state === "failed"
-        ? { status: "skipped", reason: "start-failed" }
-        : { status: "dropped", reason: "buffer-expired" };
+    // The clock stepped back past these reports: they wait from now instead.
+    for (const entry of this.#buffer) {
+      if (entry.acceptedAt > time) {
+        entry.acceptedAt = time;
+      }
+    }
 
     while (this.#buffer.length > 0) {
       const oldest = this.#buffer[0];
 
-      if (oldest === undefined || now() - oldest.acceptedAt < buffer.maxAgeMs) {
+      if (oldest === undefined || time - oldest.acceptedAt < buffer.maxAge) {
         break;
       }
 
@@ -452,64 +514,52 @@ export class DestinationRuntime<TNative = unknown> {
     this.#options.changed();
   };
 
-  #submit(session: ReporterSession<TNative>, entry: Entry) {
-    const { deadlineMs, currentGeneration, submitDepth } = this.#options;
-
-    if (entry.report.kind === "message" && !this.capabilities.messages) {
-      this.#settle(entry, {
-        status: "skipped",
-        reason: "unsupported-report-kind",
-      });
-
-      return;
+  // A report that outlived the buffer while the destination failed to start
+  // was never offered to it, which is not the same as dropping it.
+  #expiredOutcome(): DestinationOutcome {
+    if (this.#state.get().state === "failed") {
+      return { status: "skipped", reason: "start-failed" };
     }
 
+    return { status: "dropped", reason: "buffer-expired" };
+  }
+
+  #submit(session: ReporterSession<TNative>, entry: Entry) {
+    const { timeout, currentGeneration, submitDepth } = this.#options;
     const controller = new AbortController();
 
     const flight: Flight = {
       entry,
       controller,
-      done: deferred<void>(),
+      done: createDeferred<void>(),
       timer: setTimeout(() => {
         controller.abort();
         // The provider may still send it: a deadline proves nothing either way.
-        this.#land(flight, { status: "indeterminate", reason: "deadline" });
-      }, deadlineMs),
+        this.#land(flight, { status: "indeterminate", reason: "timeout" });
+      }, timeout),
     };
 
     unrefTimer(flight.timer);
     this.#flights.add(flight);
 
-    this.#options.record({
-      source: "destination",
-      type: "destination submit",
-      destination: this.name,
-      report: entry.report.id,
-      context: null,
-    });
+    this.#record("destination submit", entry.report.id);
 
+    // A diagnostic listener has disposed the destination already.
     if (!this.#flights.has(flight)) {
       return;
     }
 
-    let answer: ReturnType<ReporterSession["submit"]>;
+    let answer: Answer;
 
     submitDepth.enter();
 
     try {
-      answer = session.submit(entry.report, {
-        signal: controller.signal,
-        currentGeneration,
-      });
-
-      if (isPromiseLike(answer)) {
-        Promise.resolve(answer).then(
-          (result) => this.#land(flight, this.#toOutcome(result)),
-          (error: unknown) => this.#land(flight, { status: "failed", error }),
-        );
-
-        return;
-      }
+      answer = getSubmissionAnswer(
+        session.submit(entry.report, {
+          signal: controller.signal,
+          currentGeneration,
+        }),
+      );
     } catch (error) {
       this.#land(flight, { status: "failed", error });
 
@@ -518,26 +568,53 @@ export class DestinationRuntime<TNative = unknown> {
       submitDepth.exit();
     }
 
-    this.#land(flight, this.#toOutcome(answer));
-  }
+    if (answer.kind === "pending") {
+      // It never rejects: every way the answer can fail lands as an outcome.
+      this.#landWhenAnswered(flight, answer.promise);
 
-  #toOutcome(result: unknown): DestinationOutcome {
-    try {
-      const parsed = parseSubmissionResult(result);
-
-      if (parsed !== null) {
-        return parsed;
-      }
-    } catch (error) {
-      return { status: "failed", error };
+      return;
     }
 
-    return {
-      status: "failed",
-      error: new Error(
-        `The ${this.#options.adapter.name} adapter answered submit with an unknown result.`,
-      ),
-    };
+    if (answer.kind === "result") {
+      this.#landAnswer(flight, answer.result);
+
+      return;
+    }
+
+    assertUnreachable(answer);
+  }
+
+  async #landWhenAnswered(
+    flight: Flight,
+    answer: PromiseLike<SubmissionResult>,
+  ) {
+    let result: SubmissionResult;
+
+    try {
+      result = await answer;
+    } catch (error) {
+      this.#land(flight, { status: "failed", error });
+
+      return;
+    }
+
+    this.#landAnswer(flight, result);
+  }
+
+  // The answer is adapter code too: a field that throws when it is read is a
+  // failed submission, never a throw into the application.
+  #landAnswer(flight: Flight, result: SubmissionResult) {
+    let outcome: DestinationOutcome;
+
+    try {
+      outcome = copySubmissionOutcome(result);
+    } catch (error) {
+      this.#land(flight, { status: "failed", error });
+
+      return;
+    }
+
+    this.#land(flight, outcome);
   }
 
   // The first landing stands: a late answer finds its flight already gone.
@@ -553,18 +630,16 @@ export class DestinationRuntime<TNative = unknown> {
 
   #settle(entry: Entry, outcome: DestinationOutcome) {
     entry.settle(outcome);
-    this.#options.record({
-      source: "destination",
-      type: "destination outcome",
-      destination: this.name,
-      report: entry.report.id,
-      context: describeOutcome(outcome),
-    });
+    this.#record(
+      "destination outcome",
+      entry.report.id,
+      describeOutcome(outcome),
+    );
     this.#options.changed();
   }
 
   #release(session: ReporterSession<TNative>) {
-    this.#contain("destination dispose failed", () => session.dispose());
+    this.#contain("destination dispose failed", () => session.dispose?.());
   }
 
   #contain(type: string, task: () => unknown) {
@@ -572,20 +647,20 @@ export class DestinationRuntime<TNative = unknown> {
       const result = task();
 
       if (result !== undefined) {
-        Promise.resolve(result).catch(() => this.#recordFailure(type));
+        Promise.resolve(result).catch(() => this.#record(type));
       }
     } catch {
-      this.#recordFailure(type);
+      this.#record(type);
     }
   }
 
-  #recordFailure(type: string) {
+  #record(type: string, report?: string, context?: unknown) {
     this.#options.record({
       source: "destination",
       type,
       destination: this.name,
-      report: null,
-      context: null,
+      report,
+      context,
     });
   }
 }

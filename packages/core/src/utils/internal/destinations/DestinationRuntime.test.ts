@@ -4,6 +4,7 @@ import { createMockAdapter } from "src/mock/createMockAdapter";
 import type { MockAdapterOptions } from "src/mock/createMockAdapter";
 import type { DestinationOutcome } from "src/types/DestinationOutcome";
 import type { SanitizedReport } from "src/types/SanitizedReport";
+import type { SubmissionResult } from "src/types/SubmissionResult";
 import { DestinationRuntime } from "src/utils/internal/destinations/DestinationRuntime";
 
 afterEach(() => {
@@ -14,10 +15,10 @@ const reportOf = (
   id: string,
   kind: "message" | "exception" = "message",
 ): SanitizedReport => {
-  const base = {
+  const base: Omit<SanitizedReport, "kind"> = {
     id,
     timestamp: 1,
-    level: "info" as const,
+    level: "info",
     identity: { generation: 0, user: null },
     tags: {},
     contexts: {},
@@ -51,9 +52,9 @@ const SUBMITTED: DestinationOutcome = {
   losses: [],
 };
 
-const SUBMITTED_RESULT = {
-  status: "submitted" as const,
-  evidence: "sdk-call-returned" as const,
+const SUBMITTED_RESULT: SubmissionResult = {
+  status: "submitted",
+  evidence: "sdk-call-returned",
   event: null,
   losses: [],
 };
@@ -61,9 +62,9 @@ const SUBMITTED_RESULT = {
 const create = (
   options: MockAdapterOptions = {},
   overrides: {
-    maxReports?: number;
-    maxAgeMs?: number;
-    deadlineMs?: number;
+    capacity?: number;
+    maxAge?: number;
+    timeout?: number;
   } = {},
 ) => {
   const mock = createMockAdapter(options);
@@ -73,10 +74,11 @@ const create = (
     name: "primary",
     adapter: mock.adapter,
     buffer: {
-      maxReports: overrides.maxReports ?? 10,
-      maxAgeMs: overrides.maxAgeMs ?? 60_000,
+      capacity: overrides.capacity ?? 10,
+      maxAge: overrides.maxAge ?? 60_000,
     },
-    deadlineMs: overrides.deadlineMs ?? 5_000,
+    dedupe: { window: 1_000, maxKeys: 100 },
+    timeout: overrides.timeout ?? 5_000,
     now: () => Date.now(),
     currentGeneration: () => 7,
     readAmbient: () => ({ generation: 7, user: null, tags: {}, contexts: {} }),
@@ -89,10 +91,13 @@ const create = (
 
   const accept = (id: string, kind: "message" | "exception" = "message") => {
     outcomes.set(id, []);
-    runtime.accept({
-      report: reportOf(id, kind),
-      settle: (outcome) => outcomes.get(id)?.push(outcome),
-    });
+    runtime.accept(
+      {
+        report: reportOf(id, kind),
+        settle: (outcome) => outcomes.get(id)?.push(outcome),
+      },
+      { key: null, thrown: undefined },
+    );
   };
 
   return { mock, runtime, accept, outcomes, depth };
@@ -105,7 +110,7 @@ test("a destination is cold until started", () => {
 
   expect(runtime.status.get()).toEqual({ state: "idle" });
   expect(runtime.native).toBeNull();
-  expect(mock.openings).toEqual([]);
+  expect(mock.sessions).toEqual([]);
 });
 
 test("an observed destination status cannot prevent startup", () => {
@@ -114,25 +119,7 @@ test("an observed destination status cannot prevent startup", () => {
   Reflect.set(runtime.status.get(), "state", "disposed");
   runtime.start();
 
-  expect(mock.openings).toHaveLength(1);
-  expect(runtime.status.get()).toEqual({ state: "ready" });
-});
-
-test("a status observer cannot rewrite an opening destination", async () => {
-  const { mock, runtime } = create({ holdOpen: true });
-
-  runtime.status.subscribe(() => {
-    const status = runtime.status.get();
-
-    if (status.state === "starting") {
-      Reflect.set(status, "state", "disposed");
-    }
-  });
-  runtime.start();
-
-  expect(runtime.status.get()).toEqual({ state: "starting" });
-  mock.openings[0]?.settle();
-  await flushMicrotasks();
+  expect(mock.sessions).toHaveLength(1);
   expect(runtime.status.get()).toEqual({ state: "ready" });
 });
 
@@ -159,47 +146,9 @@ test("starting opens the adapter once and exposes its native handle", () => {
   runtime.start();
   runtime.start();
 
-  expect(mock.openings).toHaveLength(1);
-  expect(mock.openings[0]?.context).toEqual({ destination: "primary" });
+  expect(mock.sessions).toHaveLength(1);
   expect(runtime.status.get()).toEqual({ state: "ready" });
   expect(runtime.native).toBe(mock.sessions[0]);
-});
-
-test("a slow start is visible as starting, then ready", async () => {
-  const { mock, runtime } = create({ holdOpen: true });
-
-  runtime.start();
-
-  expect(runtime.status.get()).toEqual({ state: "starting" });
-  expect(runtime.native).toBeNull();
-
-  mock.openings[0]?.settle();
-  await flushMicrotasks();
-
-  expect(runtime.status.get()).toEqual({ state: "ready" });
-});
-
-test("an unavailable destination is never opened and skips what it is given", () => {
-  const { mock, runtime, accept, outcomes } = create({
-    available: { available: false, reason: "no native module" },
-  });
-
-  accept("before");
-
-  runtime.start();
-  accept("after");
-
-  expect(mock.openings).toEqual([]);
-  expect(runtime.status.get()).toEqual({
-    state: "unavailable",
-    reason: "no native module",
-  });
-  expect(outcomes.get("before")).toEqual([
-    { status: "skipped", reason: "unavailable" },
-  ]);
-  expect(outcomes.get("after")).toEqual([
-    { status: "skipped", reason: "unavailable" },
-  ]);
 });
 
 test("reports accepted before ready are buffered and submitted in order", () => {
@@ -222,7 +171,7 @@ test("reports accepted before ready are buffered and submitted in order", () => 
 });
 
 test("a full buffer drops its oldest report and says so", () => {
-  const { runtime, accept, outcomes } = create({}, { maxReports: 2 });
+  const { runtime, accept, outcomes } = create({}, { capacity: 2 });
 
   accept("first");
   accept("second");
@@ -237,7 +186,7 @@ test("a full buffer drops its oldest report and says so", () => {
 test("a buffered report that grows too old is dropped, so its receipt can settle", () => {
   vi.useFakeTimers();
 
-  const { accept, outcomes } = create({}, { maxAgeMs: 1_000 });
+  const { accept, outcomes } = create({}, { maxAge: 1_000 });
 
   accept("old");
   vi.advanceTimersByTime(600);
@@ -284,43 +233,6 @@ test("a start that throws leaves the destination failed and keeps its buffer for
   expect(outcomes.get("kept")).toEqual([SUBMITTED]);
 });
 
-test("a throwing then getter on an opened session cannot escape startup", () => {
-  const { mock, runtime } = create();
-  const open = mock.adapter.open;
-  const failure = new Error("cannot inspect session");
-
-  mock.adapter.open = (context) =>
-    Object.defineProperty(open(context), "then", {
-      get: () => {
-        throw failure;
-      },
-    });
-
-  expect(runtime.start).not.toThrow();
-  expect(runtime.status.get()).toEqual({ state: "failed", error: failure });
-});
-
-test("a start that rejects behaves the same, and a retry can succeed", async () => {
-  const failure = new Error("init rejected");
-  const { mock, runtime, accept, outcomes } = create({ holdOpen: true });
-
-  accept("kept");
-
-  runtime.start();
-  mock.openings[0]?.fail(failure);
-  await flushMicrotasks();
-
-  expect(runtime.status.get()).toEqual({ state: "failed", error: failure });
-  expect(outcomes.get("kept")).toEqual([]);
-
-  runtime.start();
-  mock.openings[1]?.settle();
-  await flushMicrotasks();
-
-  expect(runtime.status.get()).toEqual({ state: "ready" });
-  expect(outcomes.get("kept")).toEqual([SUBMITTED]);
-});
-
 test("a report that expires while start has failed is skipped as start-failed", async () => {
   vi.useFakeTimers();
 
@@ -330,7 +242,7 @@ test("a report that expires while start has failed is skipped as start-failed", 
         throw new Error("init failed");
       },
     },
-    { maxAgeMs: 1_000 },
+    { maxAge: 1_000 },
   );
 
   accept("stuck");
@@ -370,7 +282,7 @@ test("a held submission settles with what the provider answers", async () => {
   expect(runtime.inFlight).toBe(0);
 });
 
-test("a provider that rejects, throws, or answers nonsense is a failure of that report only", async () => {
+test("a provider that rejects or throws is a failure of that report only", async () => {
   const rejection = new Error("network down");
   const thrown = new Error("sdk threw");
   const rejecting = create({ hold: true });
@@ -381,11 +293,7 @@ test("a provider that rejects, throws, or answers nonsense is a failure of that 
     },
   });
 
-  const nonsense = create({
-    onSubmit: () => JSON.parse('{"status":"delivered"}'),
-  });
-
-  for (const each of [rejecting, throwing, nonsense]) {
+  for (const each of [rejecting, throwing]) {
     each.runtime.start();
     each.accept("report");
   }
@@ -399,87 +307,15 @@ test("a provider that rejects, throws, or answers nonsense is a failure of that 
   expect(throwing.outcomes.get("report")).toEqual([
     { status: "failed", error: thrown },
   ]);
-  expect(nonsense.outcomes.get("report")?.[0]).toMatchObject({
-    status: "failed",
-  });
   expect(throwing.runtime.status.get()).toEqual({ state: "ready" });
 });
-
-test("a provider result with a throwing then getter fails only its own report", () => {
-  const failure = new Error("cannot read then");
-
-  const { runtime, accept, outcomes } = create({
-    onSubmit: () => ({
-      ...SUBMITTED_RESULT,
-      get then() {
-        throw failure;
-      },
-    }),
-  });
-
-  runtime.start();
-
-  expect(() => accept("report")).not.toThrow();
-  expect(outcomes.get("report")).toEqual([
-    { status: "failed", error: failure },
-  ]);
-  expect(runtime.inFlight).toBe(0);
-});
-
-test.each([
-  { held: false, field: "status" },
-  { held: true, field: "status" },
-  { held: false, field: "event.id" },
-  { held: true, field: "event.id" },
-])(
-  "a throwing $field getter is contained after asynchronous submission $held",
-  async ({ held, field }) => {
-    const failure = new Error("cannot read result");
-
-    const result =
-      field === "status"
-        ? {
-            ...SUBMITTED_RESULT,
-            get status(): never {
-              throw failure;
-            },
-          }
-        : {
-            ...SUBMITTED_RESULT,
-            event: {
-              get id(): never {
-                throw failure;
-              },
-            },
-          };
-
-    const { runtime, accept, outcomes, mock } = create({
-      hold: held,
-      onSubmit: () => (held ? undefined : result),
-    });
-
-    runtime.start();
-
-    expect(() => accept("report")).not.toThrow();
-
-    if (held) {
-      mock.submissions[0]?.settle(result);
-    }
-
-    await flushMicrotasks();
-    expect(outcomes.get("report")).toEqual([
-      { status: "failed", error: failure },
-    ]);
-    expect(runtime.inFlight).toBe(0);
-  },
-);
 
 test("a hanging provider is cut off at the deadline as indeterminate, and its late answer is ignored", async () => {
   vi.useFakeTimers();
 
   const { mock, runtime, accept, outcomes } = create(
     { hold: true },
-    { deadlineMs: 5_000 },
+    { timeout: 5_000 },
   );
 
   runtime.start();
@@ -492,7 +328,7 @@ test("a hanging provider is cut off at the deadline as indeterminate, and its la
   vi.advanceTimersByTime(1);
 
   expect(outcomes.get("slow")).toEqual([
-    { status: "indeterminate", reason: "deadline" },
+    { status: "indeterminate", reason: "timeout" },
   ]);
   expect(mock.submissions[0]?.context.signal.aborted).toBe(true);
 
@@ -500,24 +336,6 @@ test("a hanging provider is cut off at the deadline as indeterminate, and its la
   await vi.advanceTimersByTimeAsync(0);
 
   expect(outcomes.get("slow")).toHaveLength(1);
-});
-
-test("a message is skipped, not faked, where the provider cannot carry messages", () => {
-  const { mock, runtime, accept, outcomes } = create({
-    capabilities: { messages: false },
-  });
-
-  runtime.start();
-
-  accept("note", "message");
-  accept("crash", "exception");
-
-  expect(outcomes.get("note")).toEqual([
-    { status: "skipped", reason: "unsupported-report-kind" },
-  ]);
-  expect(mock.submissions.map((submission) => submission.report.id)).toEqual([
-    "crash",
-  ]);
 });
 
 test("the adapter is told the current identity generation and its synchronous work is bracketed", () => {
@@ -567,19 +385,50 @@ test("disposal settles everything it holds and refuses what comes later", async 
   expect(outcomes.get("in-flight")).toHaveLength(1);
 });
 
-test("a session that arrives after disposal is released at once and never used", async () => {
-  const { mock, runtime, accept } = create({ holdOpen: true });
+test("a session opened while its destination was disposed from inside open is released at once and never used", () => {
+  const { mock, runtime, accept } = create({
+    onOpen: () => runtime.dispose(),
+  });
 
   runtime.start();
-  runtime.dispose();
-
-  mock.openings[0]?.settle();
-  await flushMicrotasks();
   accept("late");
 
   expect(mock.sessions[0]?.disposeCount).toBe(1);
   expect(mock.submissions).toEqual([]);
   expect(runtime.status.get()).toEqual({ state: "disposed" });
+});
+
+test("a destination disposed from inside a failing open stays disposed", () => {
+  const { runtime } = create({
+    onOpen: () => {
+      runtime.dispose();
+      throw new Error("init failed");
+    },
+  });
+
+  runtime.start();
+  runtime.start();
+
+  expect(runtime.status.get()).toEqual({ state: "disposed" });
+});
+
+test("disposing from the ready notification releases the session before any buffered report is submitted", () => {
+  const { mock, runtime, accept, outcomes } = create();
+
+  accept("buffered");
+  runtime.status.subscribe(() => {
+    if (runtime.status.get().state === "ready") {
+      runtime.dispose();
+    }
+  });
+
+  runtime.start();
+
+  expect(mock.submissions).toEqual([]);
+  expect(mock.sessions[0]?.disposeCount).toBe(1);
+  expect(outcomes.get("buffered")).toEqual([
+    { status: "dropped", reason: "disposed" },
+  ]);
 });
 
 test.each([
@@ -610,8 +459,9 @@ test.each([
         dispose: row.dispose,
       }),
     },
-    buffer: { maxReports: 10, maxAgeMs: 60_000 },
-    deadlineMs: 5_000,
+    buffer: { capacity: 10, maxAge: 60_000 },
+    dedupe: { window: 1_000, maxKeys: 100 },
+    timeout: 5_000,
     now: () => Date.now(),
     currentGeneration: () => 0,
     readAmbient: () => ({ generation: 0, user: null, tags: {}, contexts: {} }),
