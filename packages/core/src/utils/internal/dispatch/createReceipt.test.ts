@@ -1,10 +1,11 @@
 import { expect, test, vi } from "vitest";
 
+import type { DestinationOutcome } from "src/types/DestinationOutcome";
 import { createReceipt } from "src/utils/internal/dispatch/createReceipt";
 
-const submitted = {
-  status: "submitted" as const,
-  evidence: "sdk-call-returned" as const,
+const submitted: DestinationOutcome = {
+  status: "submitted",
+  evidence: "sdk-call-returned",
   event: null,
   losses: [],
 };
@@ -48,25 +49,25 @@ test("it settles once every destination has answered, not before", async () => {
 test("the first answer of a destination stands, a late one is ignored", async () => {
   const { receipt, settle } = createReceipt("report-1", ["sentry"]);
 
-  settle("sentry", { status: "indeterminate", reason: "deadline" });
+  settle("sentry", { status: "indeterminate", reason: "timeout" });
   settle("sentry", submitted);
 
   await expect(receipt.settled).resolves.toEqual({
     state: "settled",
-    outcomes: { sentry: { status: "indeterminate", reason: "deadline" } },
+    outcomes: { sentry: { status: "indeterminate", reason: "timeout" } },
   });
 });
 
 test("a late answer is ignored even while another destination is still pending", () => {
   const { receipt, settle } = createReceipt("report-1", ["sentry", "backend"]);
 
-  settle("sentry", { status: "indeterminate", reason: "deadline" });
+  settle("sentry", { status: "indeterminate", reason: "timeout" });
   settle("sentry", submitted);
 
   expect(receipt.status.get()).toEqual({
     state: "pending",
     outcomes: {
-      sentry: { status: "indeterminate", reason: "deadline" },
+      sentry: { status: "indeterminate", reason: "timeout" },
       backend: null,
     },
   });

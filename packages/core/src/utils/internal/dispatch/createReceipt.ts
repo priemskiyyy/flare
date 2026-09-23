@@ -2,7 +2,7 @@ import type { DestinationOutcome } from "src/types/DestinationOutcome";
 import type { Receipt } from "src/types/Receipt";
 import type { ReceiptStatus } from "src/types/ReceiptStatus";
 import type { ReportDropReason } from "src/types/ReportDropReason";
-import { deferred } from "src/utils/common/deferred";
+import { createDeferred } from "src/utils/common/createDeferred";
 import { ValueStore } from "src/utils/common/ValueStore";
 
 const hasAllOutcomes = <TName extends string>(
@@ -17,6 +17,7 @@ const hasAllOutcomes = <TName extends string>(
 export const createReceipt = <TName extends string>(
   id: string,
   names: readonly TName[],
+  onFinish?: () => void,
 ) => {
   const unanswered: Partial<Record<TName, DestinationOutcome | null>> =
     Object.create(null);
@@ -29,16 +30,17 @@ export const createReceipt = <TName extends string>(
     Object.freeze({ state: "pending", outcomes: Object.freeze(unanswered) }),
   );
 
-  const completion = deferred<ReceiptStatus<TName>>();
+  const completion = createDeferred<ReceiptStatus<TName>>();
 
   const finish = (final: ReceiptStatus<TName>) => {
     status.set(final);
     completion.resolve(final);
+    onFinish?.();
   };
 
   const receipt: Receipt<TName> = {
     id,
-    status: { get: status.get, subscribe: status.subscribe },
+    status: status.observable,
     settled: completion.promise,
   };
 
