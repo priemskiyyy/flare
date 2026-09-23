@@ -15,4 +15,4 @@ export type ConsoleWriter = (entry: {
   level: FlareLevel;
   line: string;
   report: SanitizedReport;
-}) => void;
+}) => void | PromiseLike<unknown>;

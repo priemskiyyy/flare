@@ -1,4 +1,4 @@
-export { consoleReporter } from "src/consoleReporter";
+export { console } from "src/console";
 
-export type { ConsoleReporterOptions } from "src/types/ConsoleReporterOptions";
+export type { ConsoleAdapterOptions } from "src/types/ConsoleAdapterOptions";
 export type { ConsoleWriter } from "src/types/ConsoleWriter";
