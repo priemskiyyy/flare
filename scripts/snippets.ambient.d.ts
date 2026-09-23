@@ -1,6 +1,7 @@
 // Names a documentation example may use without declaring them. They stand
 // for the reader's own application and for provider SDKs the reader installs.
 import type { Flare, ReporterAdapter } from "@priemskiyyy/flare";
+import type { HttpAdapterOptions } from "@priemskiyyy/flare-http";
 import type { TraceEventSource } from "@priemskiyyy/flare-trace";
 import type { ReactNode } from "react";
 
@@ -8,7 +9,7 @@ declare global {
   /** The application's Flare, with the destinations most examples route to. */
   const flare: Flare<{
     sentry: ReporterAdapter<typeof Sentry>;
-    backend: ReporterAdapter<{ endpoint: string }>;
+    backend: ReporterAdapter<HttpAdapterOptions["request"]>;
     console: ReporterAdapter;
   }>;
   const session: {
@@ -17,6 +18,8 @@ declare global {
     user: { id: string; email: string };
   };
   const error: unknown;
+  /** The application's own client call that sends one report to its backend. */
+  const sendReport: HttpAdapterOptions["request"];
   const cartId: string;
   const apiKey: string;
   const dsn: string;
