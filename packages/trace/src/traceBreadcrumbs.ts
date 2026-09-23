@@ -37,33 +37,25 @@ export const traceBreadcrumbs = <TEvents extends Record<string, unknown>>({
       return;
     }
 
+    const { name, timestamp } = event;
+
+    // An unknown occurrence time cannot safely be attributed to an account.
+    if (!Number.isFinite(timestamp) || timestamp < bridgedSince) {
+      return;
+    }
+
+    // An event named like `constructor` must not reach the map's prototype.
+    if (!Object.hasOwn(map, name)) {
+      return;
+    }
+
+    const mapper = map[name];
+
+    if (typeof mapper !== "function") {
+      return;
+    }
+
     try {
-      // A source written in plain JavaScript can deliver anything at all.
-      if (typeof event !== "object" || event === null) {
-        return;
-      }
-
-      const { name, timestamp } = event;
-
-      if (typeof name !== "string" || typeof timestamp !== "number") {
-        return;
-      }
-
-      // An unknown occurrence time cannot safely be attributed to an account.
-      if (!Number.isFinite(timestamp) || timestamp < bridgedSince) {
-        return;
-      }
-
-      if (!Object.hasOwn(map, name)) {
-        return;
-      }
-
-      const mapper = map[name];
-
-      if (typeof mapper !== "function") {
-        return;
-      }
-
       const breadcrumb = mapper(event.properties);
 
       if (breadcrumb === null) {
@@ -72,7 +64,7 @@ export const traceBreadcrumbs = <TEvents extends Record<string, unknown>>({
 
       flare.breadcrumb(breadcrumb.name, breadcrumb.data, { timestamp });
     } catch {
-      // Bad event data or a failing mapper costs only this breadcrumb.
+      // A failing mapper costs only this breadcrumb, never the source's dispatch.
       return;
     }
   };

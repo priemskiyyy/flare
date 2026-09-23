@@ -138,8 +138,13 @@ test("a mapper can decline an event, and a breadcrumb needs no data", () => {
     flare,
     now: () => 1_000,
     map: {
-      "page.viewed": ({ path }) =>
-        path.startsWith("/admin") ? null : { name: "pageViewed" },
+      "page.viewed": ({ path }) => {
+        if (path.startsWith("/admin")) {
+          return null;
+        }
+
+        return { name: "pageViewed" };
+      },
     },
   });
 
@@ -312,23 +317,6 @@ test("what a mapper returns still passes through Flare's redaction", () => {
   });
 });
 
-test("a malformed event from a loosely typed source is ignored", () => {
-  const { flare, trace, breadcrumbs } = create();
-
-  traceBreadcrumbs({
-    source: trace.source,
-    flare,
-    now: () => 1_000,
-    map: { "page.viewed": () => ({ name: "pageViewed" }) },
-  });
-
-  trace.emit(JSON.parse('{"name":"page.viewed","properties":{"path":"/x"}}'));
-  trace.emit(JSON.parse('{"name":42,"properties":{},"timestamp":1000}'));
-  trace.emit(JSON.parse("null"));
-
-  expect(breadcrumbs()).toEqual([]);
-});
-
 test.each([Number.NaN, Number.POSITIVE_INFINITY])(
   "an unusable event time %s cannot become a breadcrumb for the current account",
   (timestamp) => {
@@ -351,33 +339,6 @@ test.each([Number.NaN, Number.POSITIVE_INFINITY])(
   },
 );
 
-test("unreadable source events cannot interrupt the source's dispatch", () => {
-  const { flare, trace, breadcrumbs } = create();
-
-  traceBreadcrumbs({
-    source: trace.source,
-    flare,
-    now: () => 1_000,
-    map: { "page.viewed": () => ({ name: "pageViewed" }) },
-  });
-
-  const later = vi.fn();
-
-  trace.source.subscribe(later);
-
-  expect(() =>
-    trace.emit({
-      get name(): "page.viewed" {
-        throw new Error("unreadable event");
-      },
-      properties: { path: "/old" },
-      timestamp: 1_000,
-    }),
-  ).not.toThrow();
-  expect(later).toHaveBeenCalledOnce();
-  expect(breadcrumbs()).toEqual([]);
-});
-
 test("bridging is passive: it starts nothing and creates no report", () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
@@ -394,7 +355,7 @@ test("bridging is passive: it starts nothing and creates no report", () => {
     timestamp: Date.now() + 1_000,
   });
 
-  expect(mock.openings).toEqual([]);
+  expect(mock.sessions).toEqual([]);
   expect(mock.submissions).toEqual([]);
   expect(flare.status.get()).toEqual({ state: "idle" });
 });
