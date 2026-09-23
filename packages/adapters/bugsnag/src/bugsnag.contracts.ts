@@ -1,5 +1,5 @@
 // Typechecked, never imported: these assignments fail compilation if a real
-// Bugsnag SDK stops satisfying the structural types the reporter is written
+// Bugsnag SDK stops satisfying the structural types the adapter is written
 // against, or if the injected SDK stops flowing into the native handle.
 import BugsnagBrowser, { Breadcrumb as BrowserBreadcrumb } from "@bugsnag/js";
 import BugsnagReactNative, {
@@ -8,7 +8,6 @@ import BugsnagReactNative, {
 import { Flare } from "@priemskiyyy/flare";
 
 import { bugsnag } from "src/bugsnag";
-import { bugsnag as bugsnagReactNative } from "src/bugsnagReactNative";
 import type { BugsnagBreadcrumbConstructorLike } from "src/types/BugsnagBreadcrumbConstructorLike";
 import type { BugsnagLike } from "src/types/BugsnagLike";
 
@@ -22,13 +21,7 @@ export const reactNativeBreadcrumb: BugsnagBreadcrumbConstructorLike =
 export const flare = new Flare({
   destinations: {
     web: bugsnag({ sdk: BugsnagBrowser, Breadcrumb: BrowserBreadcrumb }),
-    owned: bugsnag({
-      sdk: BugsnagBrowser,
-      ownership: "owned",
-      start: () =>
-        BugsnagBrowser.start({ apiKey: "0123456789abcdef0123456789abcdef" }),
-    }),
-    native: bugsnagReactNative({
+    native: bugsnag({
       sdk: BugsnagReactNative,
       Breadcrumb: ReactNativeBreadcrumb,
       messages: "as-error",
@@ -41,11 +34,8 @@ export const flare = new Flare({
 export const session = flare.destination("web").native?.startSession;
 export const featureFlag = flare.destination("native").native?.addFeatureFlag;
 
-// @ts-expect-error -- an owned SDK needs a start function.
-bugsnag({ sdk: BugsnagBrowser, ownership: "owned" });
-
-// @ts-expect-error -- a borrowed SDK is started by the application, not by Flare.
-bugsnag({ sdk: BugsnagBrowser, ownership: "borrowed", start: () => {} });
+// @ts-expect-error -- a report's breadcrumbs need Bugsnag's Breadcrumb class.
+bugsnag({ sdk: BugsnagBrowser });
 
 // @ts-expect-error -- an object that is not the Bugsnag API is refused.
-bugsnag({ sdk: { notify: () => {} } });
+bugsnag({ sdk: { notify: () => {} }, Breadcrumb: BrowserBreadcrumb });

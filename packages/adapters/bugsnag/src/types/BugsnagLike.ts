@@ -1,15 +1,15 @@
 import type { BugsnagEventLike } from "src/types/BugsnagEventLike";
 
 /**
- * The part of the static Bugsnag API the reporter calls. The default export
+ * The part of the static Bugsnag API the adapter calls. The default export
  * of `@bugsnag/js` and of `@bugsnag/react-native` both satisfy it, so the
- * package imports neither: the application injects the one it already uses.
+ * package imports neither: the application passes in the one it started.
  *
  * @example
  * ```ts
- * import Bugsnag from "@bugsnag/js";
+ * import Bugsnag, { Breadcrumb } from "@bugsnag/js";
  *
- * bugsnag({ sdk: Bugsnag });
+ * bugsnag({ sdk: Bugsnag, Breadcrumb });
  * ```
  */
 export type BugsnagLike = {

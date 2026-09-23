@@ -1,7 +1,7 @@
 import type { BugsnagBreadcrumbLike } from "src/types/BugsnagBreadcrumbLike";
 
 /**
- * The part of a Bugsnag `Event` the reporter writes to, inside the `onError`
+ * The part of a Bugsnag `Event` the adapter writes to, inside the `onError`
  * callback of one `notify` call. Bugsnag builds the event from a copy of the
  * client's state, so nothing written here reaches the client.
  */
