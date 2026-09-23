@@ -20,9 +20,8 @@ const schema = {
 
 export const typed = new Flare({
   destinations: { sdk: sdkAdapter, mock: createMockAdapter().adapter },
-  default: ["sdk"],
   schema,
-  defaults: { tags: { area: "upload" } },
+  defaults: { to: ["sdk"], tags: { area: "upload" } },
 });
 
 // Destination names flow into routing, receipts and handles.
@@ -41,17 +40,20 @@ typed.capture(new Error("typed"), { to: ["sentry"] });
 // @ts-expect-error -- "sentry" is not a registered destination.
 typed.destination("sentry");
 
-export const badDefault = new Flare({
+export const badRoute = new Flare({
   destinations: { sdk: sdkAdapter },
-  // @ts-expect-error -- default names only registered destinations.
-  default: ["other"],
+  defaults: {
+    // @ts-expect-error -- defaults.to names only registered destinations.
+    to: ["other"],
+  },
 });
 
-// @ts-expect-error -- default and route are mutually exclusive.
-export const both = new Flare({
+export const badRouteFunction = new Flare({
   destinations: { sdk: sdkAdapter },
-  default: ["sdk"],
-  route: () => ["sdk"],
+  defaults: {
+    // @ts-expect-error -- so does a defaults.to function.
+    to: () => ["other"],
+  },
 });
 
 // Native handles are typed per destination.
@@ -99,17 +101,17 @@ untyped.breadcrumb("clicked", { button: "save" });
 // @ts-expect-error -- a tag is scalar even without a schema.
 untyped.tag("nested", { no: true });
 
-// A reusable route is input, so callers need not make a mutable copy.
-const primaryRoute = ["sdk"] as const;
+// A reusable list is input, so callers need not make a mutable copy.
+const primaryRoute: readonly ["sdk"] = ["sdk"];
 
 export const routed = new Flare({
   destinations: { sdk: sdkAdapter },
-  default: primaryRoute,
+  defaults: { to: primaryRoute },
 });
 routed.capture(new Error("routed"), { to: primaryRoute });
 export const selected = new Flare({
   destinations: { sdk: sdkAdapter },
-  route: () => primaryRoute,
+  defaults: { to: () => primaryRoute },
 });
 
 // Callers supply schema input; only validated output reaches an adapter.

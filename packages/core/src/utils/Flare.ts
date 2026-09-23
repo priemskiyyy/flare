@@ -23,25 +23,28 @@ import type { ObservableValue } from "src/types/ObservableValue";
 import type { Receipt } from "src/types/Receipt";
 import type { ReportDropReason } from "src/types/ReportDropReason";
 import type { ReportOptions } from "src/types/ReportOptions";
-import type { ReporterAdapter } from "src/types/ReporterAdapter";
 import type { SanitizedReport } from "src/types/SanitizedReport";
 import type { SessionSnapshot } from "src/types/SessionSnapshot";
 import type { TagsOf } from "src/types/TagsOf";
 import { ValueStore } from "src/utils/common/ValueStore";
 import {
   DEFAULT_BUFFER,
-  DEFAULT_DEADLINE_MS,
-  DEFAULT_DEDUPE,
-  DEFAULT_FLUSH_TIMEOUT_MS,
+  DEFAULT_DEDUPE_WINDOW,
+  DEFAULT_FLUSH_TIMEOUT,
   DEFAULT_REPORTS_PER_MINUTE,
+  DEFAULT_TIMEOUT,
+  MAX_DEDUPE_KEYS,
 } from "src/utils/constants/defaults";
-import { DEFAULT_LIMITS } from "src/utils/constants/limits";
-import { DEFAULT_REDACT } from "src/utils/constants/privacy";
+import {
+  DISPOSED_FLARE_STATUS,
+  IDLE_FLARE_STATUS,
+  STARTED_FLARE_STATUS,
+} from "src/utils/constants/status";
+import { FlareError } from "src/utils/FlareError";
+import { isSensitiveKey } from "src/utils/isSensitiveKey";
 import { DestinationRuntime } from "src/utils/internal/destinations/DestinationRuntime";
-import { describeOutcome } from "src/utils/internal/diagnostics/describeOutcome";
 import { Diagnostics } from "src/utils/internal/diagnostics/Diagnostics";
 import { createReceipt } from "src/utils/internal/dispatch/createReceipt";
-import { DedupeIndex } from "src/utils/internal/dispatch/DedupeIndex";
 import { RateWindow } from "src/utils/internal/dispatch/RateWindow";
 import { prepareBreadcrumb } from "src/utils/internal/intake/prepareBreadcrumb";
 import { prepareContexts } from "src/utils/internal/intake/prepareContexts";
@@ -49,6 +52,10 @@ import { prepareReportLayer } from "src/utils/internal/intake/prepareReportLayer
 import { prepareReportPayload } from "src/utils/internal/intake/prepareReportPayload";
 import { prepareTags } from "src/utils/internal/intake/prepareTags";
 import { prepareUser } from "src/utils/internal/intake/prepareUser";
+import { clampTimeout } from "src/utils/internal/options/clampTimeout";
+import { resolveCount } from "src/utils/internal/options/resolveCount";
+import { resolveDuration } from "src/utils/internal/options/resolveDuration";
+import { resolveLimits } from "src/utils/internal/options/resolveLimits";
 import { composeReport } from "src/utils/internal/report/composeReport";
 import { createReportId } from "src/utils/internal/report/createReportId";
 import { fitReport } from "src/utils/internal/report/fitReport";
@@ -57,6 +64,10 @@ import { SessionState } from "src/utils/internal/session/SessionState";
 type BoundScope = ReturnType<typeof prepareReportLayer> & {
   generation: number;
 };
+
+type DefaultTo<TDestinations extends Destinations> = NonNullable<
+  FlareOptions<TDestinations>["defaults"]
+>["to"];
 
 type BreadcrumbArguments<
   TSchema extends FlareSchema,
@@ -68,13 +79,76 @@ type BreadcrumbArguments<
       : [data: BreadcrumbsOf<TSchema>[TName], options?: BreadcrumbOptions]
     : [data?: BreadcrumbsOf<TSchema>[TName], options?: BreadcrumbOptions];
 
-const toAmbient = (snapshot: SessionSnapshot): AmbientSnapshot =>
+const createAmbientSnapshot = (snapshot: SessionSnapshot): AmbientSnapshot =>
   Object.freeze({
     generation: snapshot.generation,
     user: snapshot.user,
     tags: snapshot.tags,
     contexts: snapshot.contexts,
   });
+
+const UNSCOPED = Object.freeze({
+  layer: Object.freeze({}),
+  losses: Object.freeze([]),
+});
+
+// Report data is made of ordinary objects, where a name the data lacks would
+// otherwise read whatever Object.prototype holds under it.
+const getOwnValue = <TValue>(
+  record: Readonly<Record<string, TValue>>,
+  key: string,
+) => {
+  if (!Object.hasOwn(record, key)) {
+    return undefined;
+  }
+
+  return record[key];
+};
+
+// Only an exception has a thrown value that dedupe can recognize again.
+const getDedupeSubject = (source: ReportSource) => {
+  if (source.kind === "exception") {
+    return source.thrown;
+  }
+
+  return undefined;
+};
+
+// The clock is application code too: one that throws, or answers no number,
+// gives way to the system clock rather than to an exception.
+const createContainedClock = (now: () => number) => () => {
+  let time: unknown;
+
+  try {
+    time = now();
+  } catch {
+    return Date.now();
+  }
+
+  if (typeof time !== "number" || !Number.isFinite(time)) {
+    return Date.now();
+  }
+
+  return time;
+};
+
+// The last time a Date can hold. Every provider turns a breadcrumb's time
+// into one, and a later time would make that throw.
+const MAX_DATE_MS = 8.64e15;
+
+// NaN, the infinities, negative numbers and times past the last Date are not
+// points in time a provider can record.
+const getBreadcrumbTime = (timestamp: number | undefined) => {
+  if (timestamp === undefined || !Number.isFinite(timestamp)) {
+    return null;
+  }
+
+  if (timestamp < 0 || timestamp > MAX_DATE_MS) {
+    return null;
+  }
+
+  return timestamp;
+};
 
 /**
  * Provider-independent error reporting. A `Flare` owns how a report is built,
@@ -83,13 +157,14 @@ const toAmbient = (snapshot: SessionSnapshot): AmbientSnapshot =>
  * reports captured before that are buffered briefly.
  *
  * Nothing here throws into the application at runtime. A provider failure is
- * an outcome on the receipt, and only a misconfigured constructor throws.
+ * an outcome on the receipt, and only misconfiguration throws: the
+ * constructor, and `destination()` for a name that was never configured.
  *
  * @example
  * ```ts
  * const flare = new Flare({
- *   destinations: { sentry: sentry({ sdk: Sentry }), console: consoleReporter() },
- *   default: ["sentry"],
+ *   destinations: { sentry: sentry({ sdk: Sentry }), console: console() },
+ *   defaults: { to: ["sentry"] },
  * });
  * flare.start();
  * flare.user({ id: "user_42" });
@@ -104,15 +179,16 @@ export class Flare<
   #policy: PrivacyPolicy;
   #schema: FlareSchema;
   #defaults: ReportLayer;
+  // What the defaults lost to their bounds, which every report inherits.
+  #defaultLosses: readonly MappingLoss[];
+  #defaultTo: DefaultTo<TDestinations>;
+  #runtimes = new Map<DestinationName<TDestinations>, DestinationRuntime>();
   #defaultDestinations: ReadonlyMap<
     DestinationName<TDestinations>,
     DestinationRuntime
   >;
-  #route: FlareOptions<TDestinations, TSchema>["route"];
-  #runtimes = new Map<DestinationName<TDestinations>, DestinationRuntime>();
-  #status = new ValueStore<FlareStatus>(Object.freeze({ state: "idle" }));
+  #status = new ValueStore<FlareStatus>(IDLE_FLARE_STATUS);
   #session: SessionState;
-  #dedupe: DedupeIndex;
   #rate: RateWindow;
   #diagnostics: Diagnostics;
   #pendingReceipts = 0;
@@ -120,79 +196,132 @@ export class Flare<
   #ambient: AmbientSnapshot;
   #identityBeganAt = Number.NEGATIVE_INFINITY;
 
-  constructor(options: FlareOptions<TDestinations, TSchema>) {
-    this.#now = options.now ?? Date.now;
+  constructor({
+    destinations,
+    schema,
+    defaults = {},
+    privacy = {},
+    buffer,
+    timeout,
+    dedupe,
+    rateLimits,
+    now: readNow = Date.now,
+  }: FlareOptions<TDestinations, TSchema>) {
+    const now = createContainedClock(readNow);
+
+    const { redact = isSensitiveKey, scrub = null } = privacy;
+
+    if (typeof redact !== "function") {
+      throw new FlareError({
+        code: "INVALID_CONFIGURATION",
+        message: "privacy.redact must be a function.",
+      });
+    }
+
+    if (scrub !== null && typeof scrub !== "function") {
+      throw new FlareError({
+        code: "INVALID_CONFIGURATION",
+        message: "privacy.scrub must be a function.",
+      });
+    }
+
+    this.#now = now;
     this.#policy = {
-      redact: options.privacy?.redact ?? DEFAULT_REDACT,
-      scrub: options.privacy?.scrub ?? null,
-      limits: { ...DEFAULT_LIMITS, ...options.privacy?.limits },
+      redact,
+      scrub,
+      limits: resolveLimits(privacy.limits),
     };
-    this.#schema = options.schema ?? {};
-
-    const destinations = this.#readDestinations(options.destinations);
-
-    this.#route = options.route;
+    this.#schema = schema ?? {};
+    this.#defaultTo = defaults.to;
     this.#session = new SessionState({
       maxBreadcrumbs: this.#policy.limits.breadcrumbs,
     });
-    this.#ambient = toAmbient(this.#session.state.get());
-    this.#dedupe = new DedupeIndex({ ...DEFAULT_DEDUPE, ...options.dedupe });
+    this.#ambient = createAmbientSnapshot(this.#session.state.get());
     this.#rate = new RateWindow({
-      perMinute: options.limits?.reportsPerMinute ?? DEFAULT_REPORTS_PER_MINUTE,
+      perMinute: resolveCount(
+        "rateLimits.perMinute",
+        rateLimits?.perMinute,
+        DEFAULT_REPORTS_PER_MINUTE,
+      ),
     });
-    this.#diagnostics = new Diagnostics({
-      read: this.#readSnapshot,
-      now: this.#now,
-    });
+    this.#diagnostics = new Diagnostics({ read: this.#readSnapshot, now });
     this.diagnostics = this.#diagnostics.api;
-    this.#defaults = prepareReportLayer(options.defaults ?? {}, {
-      schema: this.#schema,
-      policy: this.#policy,
-    }).layer;
 
-    for (const [name, adapter] of destinations) {
+    const prepared = this.#prepareDefaults(defaults);
+    const invalid = prepared.losses.filter((loss) => loss.reason === "invalid");
+
+    if (invalid.length > 0) {
+      const paths = invalid.map((loss) => loss.path).join(", ");
+
+      throw new FlareError({
+        code: "INVALID_CONFIGURATION",
+        message: `Flare's defaults are invalid at ${paths}.`,
+      });
+    }
+
+    this.#defaults = prepared.layer;
+    this.#defaultLosses = prepared.losses;
+
+    const runtime = {
+      buffer: {
+        capacity: resolveCount(
+          "buffer.capacity",
+          buffer?.capacity,
+          DEFAULT_BUFFER.capacity,
+        ),
+        maxAge: resolveDuration(
+          "buffer.maxAge",
+          buffer?.maxAge,
+          DEFAULT_BUFFER.maxAge,
+        ),
+      },
+      dedupe: {
+        window: resolveDuration(
+          "dedupe.window",
+          dedupe?.window,
+          DEFAULT_DEDUPE_WINDOW,
+        ),
+        maxKeys: MAX_DEDUPE_KEYS,
+      },
+      timeout: resolveDuration("timeout", timeout, DEFAULT_TIMEOUT),
+      now,
+      currentGeneration: () => this.#session.state.get().generation,
+      readAmbient: () => this.#ambient,
+      submitDepth: {
+        enter: () => {
+          this.#submitDepth += 1;
+        },
+        exit: () => {
+          this.#submitDepth -= 1;
+        },
+      },
+      record: this.#diagnostics.record,
+      changed: this.#diagnostics.changed,
+    };
+
+    for (const name in destinations) {
+      if (!Object.hasOwn(destinations, name)) {
+        continue;
+      }
+
+      const adapter = destinations[name];
+
+      if (adapter === undefined) {
+        continue;
+      }
+
       this.#runtimes.set(
         name,
-        new DestinationRuntime({
-          name,
-          adapter,
-          buffer: { ...DEFAULT_BUFFER, ...options.buffer },
-          deadlineMs: options.deadlineMs ?? DEFAULT_DEADLINE_MS,
-          now: this.#now,
-          currentGeneration: () => this.#session.state.get().generation,
-          readAmbient: () => this.#ambient,
-          submitDepth: {
-            enter: () => {
-              this.#submitDepth += 1;
-            },
-            exit: () => {
-              this.#submitDepth -= 1;
-            },
-          },
-          record: this.#diagnostics.record,
-          changed: this.#diagnostics.changed,
-        }),
+        new DestinationRuntime({ ...runtime, name, adapter }),
       );
     }
 
-    const selected = options.default;
-
-    if (selected !== undefined && this.#route !== undefined) {
-      throw new Error("Flare accepts either default or route, not both.");
-    }
-
-    this.#defaultDestinations =
-      selected === undefined
-        ? this.#runtimes
-        : this.#selectDestinations(selected);
+    this.#defaultDestinations = this.#selectDefault(this.#defaultTo);
     this.#session.state.subscribe(this.#handleSessionChange);
   }
 
   /** Whether the runtime is idle, started or disposed. Observing it starts nothing. */
-  status: ObservableValue<FlareStatus> = {
-    get: this.#status.get,
-    subscribe: this.#status.subscribe,
-  };
+  status: ObservableValue<FlareStatus> = this.#status.observable;
 
   /** Read-only view for devtools. Observing it starts nothing and creates no report. */
   diagnostics: FlareDiagnostics;
@@ -207,21 +336,17 @@ export class Flare<
    * ```
    */
   start = () => {
-    if (this.#status.get().state === "disposed") {
+    const { state } = this.#status.get();
+
+    if (state === "disposed") {
       return;
     }
 
-    // A later call only retries destinations whose start failed. The status
-    // is already `started`, and observers compare it by identity.
-    if (this.#status.get().state === "idle") {
-      this.#status.set(Object.freeze({ state: "started" }));
-      this.#diagnostics.record({
-        source: "runtime",
-        type: "started",
-        destination: null,
-        report: null,
-        context: null,
-      });
+    // A later call only retries destinations whose start failed, and tells
+    // no status observer anything, because nothing about the runtime changed.
+    if (state === "idle") {
+      this.#status.set(STARTED_FLARE_STATUS);
+      this.#diagnostics.record({ source: "runtime", type: "started" });
     }
 
     for (const runtime of this.#runtimes.values()) {
@@ -252,9 +377,7 @@ export class Flare<
         return;
       }
 
-      const changed = this.#session.identify(prepared);
-
-      if (!changed) {
+      if (!this.#session.identify(prepared)) {
         return;
       }
 
@@ -262,8 +385,6 @@ export class Flare<
       this.#diagnostics.record({
         source: "session",
         type: "identity changed",
-        destination: null,
-        report: null,
         context: { generation: this.#session.state.get().generation },
       });
     });
@@ -300,7 +421,7 @@ export class Flare<
         return;
       }
 
-      const tag = prepared.value[key];
+      const tag = getOwnValue(prepared.value, key);
 
       if (tag === undefined) {
         return;
@@ -342,7 +463,7 @@ export class Flare<
         return;
       }
 
-      const context = prepared.value[name];
+      const context = getOwnValue(prepared.value, name);
 
       if (context === undefined) {
         return;
@@ -367,24 +488,20 @@ export class Flare<
     ...[data, options = {}]: BreadcrumbArguments<TSchema, TName>
   ) => {
     this.#guardSession(`breadcrumbs.${name}`, (generation) => {
-      const occurredAt = this.#readOccurrence(options.timestamp);
-      const timestamp = occurredAt ?? this.#now();
+      const occurredAt = getBreadcrumbTime(options.timestamp);
 
       // A backward clock must not reject a breadcrumb recorded under the current identity.
       if (occurredAt !== null && occurredAt < this.#identityBeganAt) {
         this.#diagnostics.record({
           source: "session",
           type: "breadcrumb stale",
-          destination: null,
-          report: null,
-          context: { name },
         });
 
         return;
       }
 
       const prepared = prepareBreadcrumb(
-        { name, data, timestamp },
+        { name, data, timestamp: occurredAt ?? this.#now() },
         this.#schema.breadcrumbs,
         this.#policy,
       );
@@ -429,8 +546,7 @@ export class Flare<
       options: ReportOptions<TSchema>,
     ): FlareScope<DestinationName<TDestinations>, TSchema>;
   }["bivariant"] = (options) => {
-    const generation = this.#session.state.get().generation;
-    const bound = this.#bindScope(generation, options);
+    const bound = this.#bindScope(options);
 
     return {
       capture: (thrown, captureOptions = {}) =>
@@ -478,18 +594,18 @@ export class Flare<
    *
    * @example
    * ```ts
-   * await flare.flush({ timeoutMs: 1500 });
+   * await flare.flush({ timeout: 1500 });
    * ```
    */
   flush = async ({
-    timeoutMs = DEFAULT_FLUSH_TIMEOUT_MS,
-  }: { timeoutMs?: number } = {}): Promise<
+    timeout = DEFAULT_FLUSH_TIMEOUT,
+  }: { timeout?: number } = {}): Promise<
     FlareFlushResult<DestinationName<TDestinations>>
   > => {
     const results = await Promise.all(
       [...this.#runtimes].map(async ([name, runtime]) => ({
         name,
-        ...(await runtime.flush(timeoutMs)),
+        ...(await runtime.flush(clampTimeout(timeout))),
       })),
     );
 
@@ -504,12 +620,13 @@ export class Flare<
     this.#diagnostics.record({
       source: "runtime",
       type: "flushed",
-      destination: null,
-      report: null,
-      context: { timeoutMs },
+      context: { timeout },
     });
 
-    return { drained: results.every((result) => result.drained), destinations };
+    return Object.freeze({
+      drained: results.every((result) => result.drained),
+      destinations: Object.freeze(destinations),
+    });
   };
 
   /**
@@ -527,11 +644,13 @@ export class Flare<
     const runtime = this.#runtimes.get(name);
 
     if (runtime === undefined) {
-      throw new Error(`Flare has no destination named "${name}".`);
+      throw new FlareError({
+        code: "INVALID_CONFIGURATION",
+        message: `Flare has no destination named "${name}".`,
+      });
     }
 
     return Object.freeze({
-      capabilities: runtime.capabilities,
       status: runtime.status,
       get native() {
         // Enumerating the destinations erased which native handle belongs to
@@ -548,7 +667,7 @@ export class Flare<
       return;
     }
 
-    this.#status.set(Object.freeze({ state: "disposed" }));
+    this.#status.set(DISPOSED_FLARE_STATUS);
 
     for (const runtime of this.#runtimes.values()) {
       runtime.dispose();
@@ -557,69 +676,14 @@ export class Flare<
     this.#diagnostics.dispose();
   };
 
-  #readOccurrence(timestamp: unknown) {
-    if (typeof timestamp !== "number") {
-      return null;
+  // A list is where reports go unless `to` says otherwise. Omitted, or a
+  // function that decides per report, it is every destination.
+  #selectDefault(to: DefaultTo<TDestinations>) {
+    if (to === undefined || typeof to === "function") {
+      return this.#runtimes;
     }
 
-    if (!Number.isFinite(timestamp) || timestamp < 0) {
-      return null;
-    }
-
-    return timestamp;
-  }
-
-  #readDestinations(destinations: TDestinations) {
-    const adapters = new Map<DestinationName<TDestinations>, ReporterAdapter>();
-    const owners = new Map<unknown, string>();
-    const singletons = new Map<object, string>();
-
-    for (const name in destinations) {
-      if (!Object.hasOwn(destinations, name)) {
-        continue;
-      }
-
-      const adapter = destinations[name];
-
-      if (adapter === undefined) {
-        continue;
-      }
-
-      const owner = owners.get(adapter);
-
-      if (owner !== undefined) {
-        throw new Error(
-          `Flare destinations "${owner}" and "${name}" share one adapter. Create one adapter per destination.`,
-        );
-      }
-
-      owners.set(adapter, name);
-      this.#claimSingleton(singletons, adapter.singleton, name);
-      adapters.set(name, adapter);
-    }
-
-    return adapters;
-  }
-
-  // A process-wide SDK reports every event it is given: registered twice, it reports twice.
-  #claimSingleton(
-    singletons: Map<object, string>,
-    singleton: object | undefined,
-    name: string,
-  ) {
-    if (singleton === undefined) {
-      return;
-    }
-
-    const owner = singletons.get(singleton);
-
-    if (owner !== undefined) {
-      throw new Error(
-        `Flare destinations "${owner}" and "${name}" drive the same singleton SDK. Register it once.`,
-      );
-    }
-
-    singletons.set(singleton, name);
+    return this.#selectDestinations(to);
   }
 
   #selectDestinations(names: readonly DestinationName<TDestinations>[]) {
@@ -632,7 +696,10 @@ export class Flare<
       const runtime = this.#runtimes.get(name);
 
       if (runtime === undefined) {
-        throw new Error(`Flare has no destination named "${String(name)}".`);
+        throw new FlareError({
+          code: "INVALID_CONFIGURATION",
+          message: `Flare has no destination named "${String(name)}".`,
+        });
       }
 
       destinations.set(name, runtime);
@@ -653,9 +720,8 @@ export class Flare<
         [...this.#runtimes.values()].map((runtime) =>
           Object.freeze({
             name: runtime.name,
-            adapter: runtime.adapter.name,
-            status: runtime.status.get(),
-            capabilities: runtime.capabilities,
+            adapter: runtime.adapterName,
+            status: runtime.currentStatus,
             buffered: runtime.buffered,
             inFlight: runtime.inFlight,
           }),
@@ -680,7 +746,7 @@ export class Flare<
       return;
     }
 
-    const next = toAmbient(current);
+    const next = createAmbientSnapshot(current);
 
     this.#ambient = next;
 
@@ -706,8 +772,6 @@ export class Flare<
       this.#diagnostics.record({
         source: "session",
         type: "session change rejected",
-        destination: null,
-        report: null,
         context: { path },
       });
     }
@@ -729,13 +793,30 @@ export class Flare<
     this.#diagnostics.record({
       source: "session",
       type: "session losses",
-      destination: null,
-      report: null,
       context: { losses },
     });
   }
 
-  #bindScope(generation: number, options: ReportOptions<TSchema>): BoundScope {
+  // A scrubber that throws on the defaults is misconfiguration, which is the
+  // one thing that throws, as a FlareError that keeps what went wrong.
+  #prepareDefaults(defaults: ReportOptions<TSchema>) {
+    try {
+      return prepareReportLayer(defaults, {
+        schema: this.#schema,
+        policy: this.#policy,
+      });
+    } catch (error) {
+      throw new FlareError({
+        code: "INVALID_CONFIGURATION",
+        message: "Flare's defaults could not be sanitized.",
+        cause: error,
+      });
+    }
+  }
+
+  #bindScope(options: ReportOptions<TSchema>): BoundScope {
+    const { generation } = this.#session.state.get();
+
     try {
       return {
         generation,
@@ -763,28 +844,25 @@ export class Flare<
       return "reentrant";
     }
 
+    // Before the rate budget: a stale report spends none of it.
+    if (
+      scope !== null &&
+      scope.generation !== this.#session.state.get().generation
+    ) {
+      return "stale-scope";
+    }
+
     const admission = this.#rate.admit(this.#now());
 
+    if (admission === "refused-first") {
+      this.#diagnostics.record({
+        source: "report",
+        type: "rate limit reached",
+      });
+    }
+
     if (admission !== "admitted") {
-      if (admission === "refused-first") {
-        this.#diagnostics.record({
-          source: "report",
-          type: "rate limit reached",
-          destination: null,
-          report: null,
-          context: null,
-        });
-      }
-
       return "rate-limited";
-    }
-
-    if (scope === null) {
-      return null;
-    }
-
-    if (scope.generation !== this.#session.state.get().generation) {
-      return "stale-scope";
     }
 
     return null;
@@ -796,7 +874,10 @@ export class Flare<
     options: ReportOptions<TSchema>,
     scope: BoundScope | null,
   ): SanitizedReport {
+    // Read before intake runs application validators and scrubbers, which
+    // could otherwise relabel this report by switching accounts.
     const session = this.#session.state.get();
+    const scoped = scope ?? UNSCOPED;
     const payload = prepareReportPayload(source, this.#policy);
 
     const prepared = prepareReportLayer(options, {
@@ -810,11 +891,12 @@ export class Flare<
       payload: payload.payload,
       defaults: this.#defaults,
       session,
-      scope: scope === null ? null : scope.layer,
+      scope: scoped.layer,
       options: prepared.layer,
       losses: [
         ...payload.losses,
-        ...(scope === null ? [] : scope.losses),
+        ...this.#defaultLosses,
+        ...scoped.losses,
         ...prepared.losses,
       ],
     });
@@ -822,30 +904,42 @@ export class Flare<
     return fitReport(report, this.#policy.limits.totalSize);
   }
 
+  // Routing fails closed: a `to` that throws or names an unknown
+  // destination sends the report nowhere rather than somewhere unintended.
   #resolveRoute(
     report: SanitizedReport,
-    options: CaptureOptions<DestinationName<TDestinations>, TSchema>,
+    to: readonly DestinationName<TDestinations>[] | undefined,
   ) {
     try {
-      let selected = options.to;
-
-      if (selected === undefined) {
-        if (typeof this.#route !== "function") {
-          return this.#defaultDestinations;
-        }
-
-        selected = this.#route({ report });
+      if (to !== undefined) {
+        return this.#selectDestinations(to);
       }
 
-      if (!Array.isArray(selected)) {
-        return null;
+      if (typeof this.#defaultTo !== "function") {
+        return this.#defaultDestinations;
       }
 
-      return this.#selectDestinations(selected);
+      return this.#selectDestinations(this.#defaultTo({ report }));
     } catch {
-      // Routing is a privacy boundary, including reading and iterating its result.
       return null;
     }
+  }
+
+  #drop(id: string, reason: ReportDropReason) {
+    const { receipt, drop } = createReceipt<DestinationName<TDestinations>>(
+      id,
+      [],
+    );
+
+    drop(reason);
+    this.#diagnostics.record({
+      source: "report",
+      type: "report dropped",
+      report: id,
+      context: { reason },
+    });
+
+    return receipt;
   }
 
   #report(
@@ -854,65 +948,64 @@ export class Flare<
     scope: BoundScope | null,
   ): Receipt<DestinationName<TDestinations>> {
     const id = createReportId();
-
-    const drop = (reason: ReportDropReason) => {
-      const dropped = createReceipt<DestinationName<TDestinations>>(id, []);
-
-      dropped.drop(reason);
-      this.#diagnostics.record({
-        source: "report",
-        type: "report dropped",
-        destination: null,
-        report: id,
-        context: { reason },
-      });
-
-      return dropped.receipt;
-    };
-
     const refusal = this.#refusal(scope);
 
     if (refusal !== null) {
-      return drop(refusal);
+      return this.#drop(id, refusal);
     }
 
+    let to: readonly DestinationName<TDestinations>[] | undefined;
+    let key: string | null;
     let report: SanitizedReport;
-    let dedupeKey: string | null;
 
     try {
+      // The caller's getters, read once and contained like the rest of intake.
+      to = options.to;
+      key = options.dedupe?.key ?? null;
       report = this.#build(id, source, options, scope);
-
-      const key = options.dedupe?.key;
-
-      dedupeKey = typeof key === "string" ? key : null;
     } catch {
       // Privacy outranks delivery: what could not be sanitized is not sent.
-      return drop("sanitizer-failed");
+      return this.#drop(id, "sanitizer-failed");
     }
 
-    const destinations = this.#resolveRoute(report, options);
+    const destinations = this.#resolveRoute(report, to);
 
     if (destinations === null) {
-      return drop("route-failed");
+      return this.#drop(id, "route-failed");
     }
 
     if (destinations.size === 0) {
-      return drop("no-destinations");
+      return this.#drop(id, "no-destinations");
     }
 
-    const names = [...destinations.keys()];
-    const { receipt, settle } = createReceipt(id, names);
+    return this.#dispatch(report, destinations, {
+      key,
+      thrown: getDedupeSubject(source),
+    });
+  }
 
-    this.#pendingReceipts += 1;
-    receipt.settled.then(() => {
+  #dispatch(
+    report: SanitizedReport,
+    destinations: ReadonlyMap<
+      DestinationName<TDestinations>,
+      DestinationRuntime
+    >,
+    occurrence: { key: string | null; thrown: unknown },
+  ) {
+    const names = [...destinations.keys()];
+
+    // Counted down as the receipt finishes, not a tick later, so the snapshot
+    // disposal freezes counts nothing that disposal settled.
+    const { receipt, settle } = createReceipt(report.id, names, () => {
       this.#pendingReceipts -= 1;
       this.#diagnostics.changed();
     });
+
+    this.#pendingReceipts += 1;
     this.#diagnostics.record({
       source: "report",
       type: "report accepted",
-      destination: null,
-      report: id,
+      report: report.id,
       context: {
         kind: report.kind,
         destinations: names,
@@ -920,35 +1013,11 @@ export class Flare<
       },
     });
 
-    const thrown = source.kind === "exception" ? source.thrown : undefined;
-
     for (const [name, runtime] of destinations) {
-      const duplicate = this.#dedupe.isDuplicate({
-        destination: name,
-        generation: report.identity.generation,
-        key: dedupeKey,
-        thrown,
-        now: this.#now(),
-      });
-
-      if (duplicate) {
-        const outcome = { status: "dropped", reason: "deduped" } as const;
-
-        settle(name, outcome);
-        this.#diagnostics.record({
-          source: "destination",
-          type: "destination outcome",
-          destination: name,
-          report: id,
-          context: describeOutcome(outcome),
-        });
-        continue;
-      }
-
-      runtime.accept({
-        report,
-        settle: (outcome) => settle(name, outcome),
-      });
+      runtime.accept(
+        { report, settle: (outcome) => settle(name, outcome) },
+        occurrence,
+      );
     }
 
     this.#diagnostics.changed();

@@ -13,8 +13,13 @@ export type CaptureOptions<
   TName extends string = string,
   TSchema extends FlareSchema = FlareSchema,
 > = ReportOptions<TSchema> & {
-  /** Replaces the default route for this report. It never merges with it. */
+  /** Replaces `defaults.to` for this report. It never merges with it. */
   to?: readonly TName[];
-  /** A later report with the same key is not sent again to a destination that already has it. */
+  /**
+   * A later report with the same key is not sent again to a destination that
+   * already has it, for as long as the identity lasts: the time window applies
+   * only to a thrown object, and a key is forgotten only once 100 newer ones
+   * push it out.
+   */
   dedupe?: { key: string };
 };
