@@ -1,76 +1,35 @@
-import type { FlareUser } from "@priemskiyyy/flare";
-import { useDestinationStatus, useFlare } from "@priemskiyyy/flare-react";
-import { useState } from "react";
+import { ArrowCounterClockwise, Flame } from "@phosphor-icons/react";
+import type React from "react";
 
-import "src/components/Header/Header.css";
+import { FlareStatusBadge } from "src/components/Badge/FlareStatusBadge";
+import { IconTile } from "src/components/IconTile/IconTile";
+import { SectionNav } from "src/components/Section/SectionNav";
+import { buttonStyles } from "src/styles/buttonStyles";
 
-const ACCOUNTS: readonly FlareUser[] = [
-  { id: "u_1", name: "Ada" },
-  { id: "u_2", name: "Grace" },
-];
-
-export const Header = () => {
-  const flare = useFlare();
-  const backend = useDestinationStatus("backend");
-  const [user, setUser] = useState<FlareUser | null>(null);
-
-  const handleAccountChange = (next: FlareUser | null) => {
-    flare.user(next);
-
-    if (next !== null) {
-      flare.breadcrumb("signedIn", { name: next.name ?? next.id });
-    }
-
-    setUser(next);
-  };
-
-  return (
-    <header className="application-header">
-      <div className="header-inner">
-        <a className="brand" href="#main" aria-label="Flare playground">
-          <svg
-            className="brand-mark"
-            viewBox="0 0 32 32"
-            fill="none"
-            aria-hidden="true"
-          >
-            <path
-              d="M16 3v8m0 10v8M3 16h8m10 0h8M7 7l6 6m6 6 6 6M7 25l6-6m6-6 6-6"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinecap="round"
-            />
-          </svg>
-          <strong>Flare</strong>
-          <span>React playground</span>
-        </a>
-        <div className="backend-state" data-state={backend.state}>
-          <span className="status-dot" /> Demo backend{" "}
-          <strong>{backend.state}</strong>
-        </div>
-        <div className="account-control" role="group" aria-label="Account">
-          <span className="account-label">Session</span>
-          <button
-            type="button"
-            aria-label="Sign out"
-            aria-pressed={user === null}
-            onClick={() => handleAccountChange(null)}
-          >
-            Anonymous
-          </button>
-          {ACCOUNTS.map((account) => (
-            <button
-              key={account.id}
-              type="button"
-              aria-label={`Sign in as ${account.name}`}
-              aria-pressed={user?.id === account.id}
-              onClick={() => handleAccountChange(account)}
-            >
-              {account.name}
-            </button>
-          ))}
-        </div>
-      </div>
-    </header>
-  );
+// Nothing outlives the page, so reloading it is a complete reset.
+const handleResetPress = () => {
+  window.location.reload();
 };
+
+export const Header: React.FunctionComponent = () => (
+  <header className="sticky top-0 z-20 border-b border-stone-200/70 bg-stone-50/80 backdrop-blur dark:border-stone-800 dark:bg-stone-950/70">
+    <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
+      <div className="mr-auto flex min-w-0 items-center gap-2">
+        <IconTile icon={Flame} size="small" />
+        <h1 className="text-lg font-semibold">Ledger</h1>
+        <FlareStatusBadge />
+      </div>
+      <div className="order-last w-full min-w-0 lg:order-none lg:w-auto">
+        <SectionNav />
+      </div>
+      <button
+        type="button"
+        onClick={handleResetPress}
+        className={buttonStyles({ variant: "ghost", size: "small" })}
+      >
+        <ArrowCounterClockwise aria-hidden="true" size={14} weight="bold" />
+        Reset demo
+      </button>
+    </div>
+  </header>
+);
