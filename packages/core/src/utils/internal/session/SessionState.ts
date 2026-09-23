@@ -28,10 +28,7 @@ export class SessionState {
     this.#maxBreadcrumbs = maxBreadcrumbs;
   }
 
-  state: ObservableValue<SessionSnapshot> = {
-    get: this.#state.get,
-    subscribe: this.#state.subscribe,
-  };
+  state: ObservableValue<SessionSnapshot> = this.#state.observable;
 
   /** Sets the user and reports whether a new identity generation started. */
   identify = ({

@@ -44,4 +44,10 @@ export class ValueStore<TValue> {
       this.#listeners.delete(listener);
     };
   };
+
+  /** The read side, for owners that must not hand out `set`. */
+  observable: ObservableValue<TValue> = {
+    get: this.get,
+    subscribe: this.subscribe,
+  };
 }
