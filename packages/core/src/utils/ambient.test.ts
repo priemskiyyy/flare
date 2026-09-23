@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 
-import { createReporterAdapter } from "src/generators/createReporterAdapter";
 import { createMockAdapter } from "src/mock/createMockAdapter";
+import type { SubmissionResult } from "src/types/SubmissionResult";
 import { Flare } from "src/utils/Flare";
 
 test("an ambient integration mirrors sanitized session state, and only when it changes", () => {
@@ -83,9 +83,8 @@ test("echoing a session tag from a provider stops after the actual change", () =
 
   const flare = new Flare({
     destinations: {
-      first: createReporterAdapter({
+      first: {
         name: "echo",
-        capabilities: mock.adapter.capabilities,
         open: () => ({
           native: null,
           submit: () => ({
@@ -105,9 +104,10 @@ test("echoing a session tag from a provider stops after the actual change", () =
                 flare.tag("area", "upload");
               }
             },
+            breadcrumb: () => {},
           },
         }),
-      }),
+      },
       second: mock.adapter,
     },
   });
@@ -148,9 +148,8 @@ test.each(["session", "breadcrumb"])(
 
     const flare = new Flare({
       destinations: {
-        first: createReporterAdapter({
+        first: {
           name: "first",
-          capabilities: mock.adapter.capabilities,
           open: () => ({
             native: null,
             submit: () => ({
@@ -170,7 +169,7 @@ test.each(["session", "breadcrumb"])(
               },
             },
           }),
-        }),
+        },
         second: mock.adapter,
       },
     });
@@ -196,9 +195,8 @@ test("a nested metadata update reaches every provider without being overwritten 
 
   const flare = new Flare({
     destinations: {
-      first: createReporterAdapter({
+      first: {
         name: "first",
-        capabilities: mock.adapter.capabilities,
         open: () => ({
           native: null,
           submit: () => ({
@@ -211,9 +209,10 @@ test("a nested metadata update reaches every provider without being overwritten 
                 flare.tag("plan", "team");
               }
             },
+            breadcrumb: () => {},
           },
         }),
-      }),
+      },
       second: mock.adapter,
     },
   });
@@ -234,9 +233,8 @@ test("a provider cannot replace the ambient snapshot another provider receives",
 
   const flare = new Flare({
     destinations: {
-      first: createReporterAdapter({
+      first: {
         name: "mutating",
-        capabilities: mock.adapter.capabilities,
         open: () => ({
           native: null,
           submit: () => ({
@@ -252,9 +250,10 @@ test("a provider cannot replace the ambient snapshot another provider receives",
                 Reflect.set(snapshot, "tags", { source: "provider" }),
               );
             },
+            breadcrumb: () => {},
           },
         }),
-      }),
+      },
       second: mock.adapter,
     },
   });
@@ -292,8 +291,8 @@ test("an ambient integration that throws cannot break a session change", () => {
             session: () => {
               throw new Error("provider global rejected");
             },
+            breadcrumb: () => {},
           },
-          dispose: () => {},
         }),
       },
     },
@@ -306,7 +305,6 @@ test("an ambient integration that throws cannot break a session change", () => {
 });
 
 test("ambient promise rejections are diagnosed and do not interrupt reporting", async () => {
-  const mock = createMockAdapter();
   const rejected = Promise.reject(new Error("provider global rejected"));
 
   // Keep a broken implementation from turning this assertion into an unhandled rejection.
@@ -314,9 +312,8 @@ test("ambient promise rejections are diagnosed and do not interrupt reporting", 
 
   const flare = new Flare({
     destinations: {
-      primary: createReporterAdapter({
+      primary: {
         name: "ambient",
-        capabilities: mock.adapter.capabilities,
         open: () => ({
           native: null,
           submit: () => ({
@@ -328,7 +325,7 @@ test("ambient promise rejections are diagnosed and do not interrupt reporting", 
             breadcrumb: () => rejected,
           },
         }),
-      }),
+      },
     },
   });
 
@@ -360,9 +357,9 @@ test("unreadable ambient methods are diagnosed without stranding buffered report
         ...mock.adapter,
         open: () => ({
           native: null,
-          submit: () => ({
-            status: "submitted" as const,
-            evidence: "sdk-call-returned" as const,
+          submit: (): SubmissionResult => ({
+            status: "submitted",
+            evidence: "sdk-call-returned",
           }),
           ambient: {
             get session(): never {
@@ -372,7 +369,6 @@ test("unreadable ambient methods are diagnosed without stranding buffered report
               throw new Error("unreadable breadcrumb mirror");
             },
           },
-          dispose: () => {},
         }),
       },
     },
