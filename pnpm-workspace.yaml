@@ -6,7 +6,9 @@ packages:
 allowBuilds:
   # The provider SDKs are here for their types only. None of their install
   # scripts, binaries or generated code is ever run.
+  "@datadog/mobile-react-native": false
   "@firebase/util": false
   "@sentry/cli": false
+  core-js: false
   esbuild: true
   protobufjs: false
