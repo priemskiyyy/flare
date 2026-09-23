@@ -1,4 +1,5 @@
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import vue from "@vitejs/plugin-vue";
 import { existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import solid from "vite-plugin-solid";
@@ -81,6 +82,16 @@ const exampleProjects: TestProjectConfiguration[] = [
       // Node would load the icons with their own React; through Vite they share
       // the deduplicated one, as CI's React version swap needs.
       server: { deps: { inline: ["@phosphor-icons/react"] } },
+    },
+  },
+  {
+    extends: true,
+    plugins: [vue()],
+    resolve: { alias: exampleAliases("vue"), dedupe: ["vue"] },
+    test: {
+      name: "example-vue",
+      include: ["examples/vue/src/**/*.test.ts"],
+      environment: "jsdom",
     },
   },
 ];

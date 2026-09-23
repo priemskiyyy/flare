@@ -16,6 +16,7 @@ export const LEDGER_SCHEMA = {
       iban: z.string(),
     }),
     react: z.object({ componentStack: z.string() }),
+    vue: z.object({ info: z.string() }),
   },
   breadcrumbs: {
     signedIn: z.object({ company: z.string() }),

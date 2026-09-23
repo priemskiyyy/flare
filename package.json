@@ -49,10 +49,12 @@
     "@types/node": "22.20.2",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-vue": "6.0.9",
     "@vue/test-utils": "2.5.0",
     "eslint": "9.39.4",
     "eslint-plugin-react-hooks": "7.1.1",
     "eslint-plugin-svelte": "3.23.0",
+    "eslint-plugin-vue": "10.11.0",
     "jsdom": "27.4.0",
     "posthog-js": "1.434.2",
     "posthog-react-native": "4.75.0",
@@ -72,6 +74,7 @@
     "vitepress": "1.6.4",
     "vitest": "4.1.10",
     "vue": "3.5.42",
+    "vue-tsc": "3.3.11",
     "zod": "4.1.12"
   }
 }

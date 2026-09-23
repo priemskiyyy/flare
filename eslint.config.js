@@ -1,6 +1,7 @@
 import eslint from "@eslint/js";
 import reactHooks from "eslint-plugin-react-hooks";
 import svelte from "eslint-plugin-svelte";
+import vue from "eslint-plugin-vue";
 import tseslint from "typescript-eslint";
 
 const toRestrictions = (entries) =>
@@ -80,9 +81,14 @@ export default tseslint.config(
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
+  // Vue's rules only for single-file components; the binding's render functions are plain TypeScript.
+  ...vue.configs["flat/recommended"].map((config) => ({
+    ...config,
+    files: ["**/*.vue"],
+  })),
   ...svelte.configs.recommended,
   {
-    files: ["**/*.{js,mjs,ts,tsx,svelte}"],
+    files: ["**/*.{js,mjs,ts,tsx,vue,svelte}"],
     rules: {
       "padding-line-between-statements": [
         "error",
@@ -130,6 +136,24 @@ export default tseslint.config(
     ],
     plugins: { "react-hooks": reactHooks },
     rules: reactHooks.configs.recommended.rules,
+  },
+  {
+    files: ["**/*.vue"],
+    languageOptions: {
+      parserOptions: {
+        parser: tseslint.parser,
+        extraFileExtensions: [".vue"],
+      },
+    },
+    rules: {
+      ...typescriptRules,
+      "no-undef": "off",
+      "vue/multi-word-component-names": ["error", { ignores: ["Application"] }],
+      // Prettier owns template layout, including compact inline elements.
+      "vue/singleline-html-element-content-newline": "off",
+      "vue/max-attributes-per-line": "off",
+      "vue/html-self-closing": "off",
+    },
   },
   {
     files: ["**/*.svelte", "**/*.svelte.ts"],

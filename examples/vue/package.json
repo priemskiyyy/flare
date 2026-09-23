@@ -1,0 +1,22 @@
+{
+  "name": "example-vue",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vue-tsc --noEmit -p . && vite build",
+    "preview": "vite preview",
+    "lint:typescript": "vue-tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@priemskiyyy/flare": "workspace:*",
+    "@priemskiyyy/flare-devtools": "workspace:*",
+    "@priemskiyyy/flare-vue": "workspace:*",
+    "example-shared": "workspace:*",
+    "vue": "3.5.42"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "tailwindcss": "4.3.3"
+  }
+}
