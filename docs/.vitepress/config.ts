@@ -12,7 +12,7 @@ const base =
   process.env.DOCS_BASE_PATH ?? (siteUrl ? new URL(siteUrl).pathname : "/");
 
 const description =
-  "Provider-independent error reporting for TypeScript. One API over Sentry, Bugsnag, Crashlytics, your own backend and the console, with account boundaries, redaction, typed routing and honest receipts.";
+  "Provider-independent error reporting for TypeScript. One API over Sentry, Bugsnag, Crashlytics, PostHog, Datadog, OpenTelemetry, your own backend and the console, with account boundaries, redaction, typed routing and honest receipts.";
 
 // llms.txt lists every guide with its description; llms-full.txt inlines them.
 const writeLlmsText = async (srcDir: string, outDir: string) => {
