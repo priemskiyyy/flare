@@ -1,3 +1,4 @@
+import { FlareError } from "@priemskiyyy/flare";
 import { useContext } from "react";
 
 import { FlareContext } from "src/context/FlareContext";
@@ -18,7 +19,10 @@ export const useFlare = (): RegisteredFlare => {
   const flare = useContext(FlareContext);
 
   if (flare === undefined) {
-    throw new Error("Flare hooks must be used within a FlareProvider.");
+    throw new FlareError({
+      code: "INVALID_CONFIGURATION",
+      message: "Flare hooks must be used within a FlareProvider.",
+    });
   }
 
   return flare;

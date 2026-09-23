@@ -1,3 +1,4 @@
+import { FlareError } from "@priemskiyyy/flare";
 import type { CaptureOptions, Receipt } from "@priemskiyyy/flare";
 import { Component } from "react";
 import type { ErrorInfo, PropsWithChildren, ReactNode } from "react";
@@ -84,9 +85,10 @@ export class FlareErrorBoundary extends Component<
 
   override render() {
     if (this.context === undefined) {
-      throw new Error(
-        "FlareErrorBoundary must be used within a FlareProvider.",
-      );
+      throw new FlareError({
+        code: "INVALID_CONFIGURATION",
+        message: "FlareErrorBoundary must be used within a FlareProvider.",
+      });
     }
 
     const { caught } = this.state;
