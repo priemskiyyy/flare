@@ -1,0 +1,19 @@
+{
+  "name": "test-providers",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run --config vitest.config.ts",
+    "lint:typescript": "tsc --noEmit -p ."
+  },
+  "devDependencies": {
+    "@bugsnag/js": "8.10.0",
+    "@priemskiyyy/flare": "workspace:*",
+    "@priemskiyyy/flare-bugsnag": "workspace:*",
+    "@priemskiyyy/flare-http": "workspace:*",
+    "@priemskiyyy/flare-posthog": "workspace:*",
+    "@priemskiyyy/flare-sentry": "workspace:*",
+    "@sentry/browser": "10.75.0",
+    "posthog-js": "1.434.2"
+  }
+}

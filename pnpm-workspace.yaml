@@ -2,6 +2,7 @@ packages:
   - packages/*
   - packages/adapters/*
   - examples/*
+  - tests/providers
 
 allowBuilds:
   # The provider SDKs are here for their types only. None of their install

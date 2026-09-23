@@ -66,3 +66,8 @@ jobs:
       # with no service, no device and no credentials.
       - name: Unit tests
         run: pnpm test:unit
+
+      # The real Sentry, PostHog and Bugsnag SDKs and the HTTP adapter, over
+      # their own transports to receivers on loopback. No service, no Docker.
+      - name: Provider tests
+        run: pnpm test:providers

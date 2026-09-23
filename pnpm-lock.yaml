@@ -552,6 +552,33 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  tests/providers:
+    devDependencies:
+      '@bugsnag/js':
+        specifier: 8.10.0
+        version: 8.10.0
+      '@priemskiyyy/flare':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@priemskiyyy/flare-bugsnag':
+        specifier: workspace:*
+        version: link:../../packages/adapters/bugsnag
+      '@priemskiyyy/flare-http':
+        specifier: workspace:*
+        version: link:../../packages/adapters/http
+      '@priemskiyyy/flare-posthog':
+        specifier: workspace:*
+        version: link:../../packages/adapters/posthog
+      '@priemskiyyy/flare-sentry':
+        specifier: workspace:*
+        version: link:../../packages/adapters/sentry
+      '@sentry/browser':
+        specifier: 10.75.0
+        version: 10.75.0
+      posthog-js:
+        specifier: 1.434.2
+        version: 1.434.2(@types/react@19.2.17)(react@19.2.8)
+
 packages:
 
   '@acemir/cssom@0.9.31':

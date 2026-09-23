@@ -38,6 +38,8 @@ An adapter maps one sanitized report onto one provider and nothing more. [Writin
 
 `pnpm test:unit` runs one vitest project per package, each with a `src` alias onto its own source. Tests sit beside their sources as `<Source>.test.ts` and are named after the invariant they guard. A new test is watched failing once before it is trusted. Interleaving is tested by reentrancy and by held mock submissions, not by sleeping; fake timers are for deadlines, buffer age and dedupe windows.
 
+`tests/providers` runs the real Sentry, PostHog and Bugsnag SDKs and the HTTP adapter over their own transports to receivers on loopback, as `pnpm test:providers`, which `pnpm check` includes. Its README says what it covers and what it does not.
+
 ## Documentation
 
 Every `ts` and `tsx` example in a README, in `docs/` and in `examples/` is typechecked against the built packages by `pnpm verify:snippets`. Write examples that compile as they stand. A name that stands for the reader's application goes in `scripts/snippets.ambient.d.ts`. Mark a fence with `<!-- snippet: fragment -->` only when it cannot be a module, such as bare JSX, or when it augments a module with `declare module`: every snippet compiles in one program, so an augmentation would retype all the others.
