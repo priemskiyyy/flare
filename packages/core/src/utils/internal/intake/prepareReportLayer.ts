@@ -28,12 +28,17 @@ const prepareOperation = (
   if (operation === null) {
     return null;
   }
+
   if (typeof operation !== "string") {
     losses.push({ path: "operation", reason: "invalid" });
+
     return null;
   }
+
   const sanitized = sanitizeValue(operation, "operation", policy);
+
   losses.push(...sanitized.losses);
+
   return typeof sanitized.value === "string" ? sanitized.value : null;
 };
 
@@ -49,18 +54,21 @@ export const prepareReportLayer = <TSchema extends FlareSchema>(
 
   if (isRecord(tags)) {
     const prepared = prepareTags(tags, schema.tags, policy);
+
     layer.tags = prepared.value;
     losses.push(...prepared.losses);
   }
 
   if (isRecord(contexts)) {
     const prepared = prepareContexts(contexts, schema.contexts, policy);
+
     layer.contexts = prepared.value;
     losses.push(...prepared.losses);
   }
 
   if (user !== undefined) {
     const prepared = prepareUser(user, policy);
+
     layer.user = prepared.user;
     losses.push(...prepared.losses);
   }
@@ -71,8 +79,10 @@ export const prepareReportLayer = <TSchema extends FlareSchema>(
 
   if (level !== undefined && !isLevel(level)) {
     losses.push({ path: "level", reason: "invalid" });
+
     return { layer, losses };
   }
+
   if (level !== undefined) {
     layer.level = level;
   }

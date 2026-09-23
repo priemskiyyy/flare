@@ -18,6 +18,7 @@ export const useObservableValue = <TValue>(
   onMount(() => {
     createEffect(() => {
       const current = observable();
+
       setSnapshot(() => current.get());
       onCleanup(current.subscribe(() => setSnapshot(() => current.get())));
 

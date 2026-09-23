@@ -23,15 +23,18 @@ export const createAmbientMirror = (sdk: SentryLike, parts: Parts) => {
 
   const mirrorTags = (next: AmbientSnapshot["tags"]) => {
     const removed: Record<string, undefined> = Object.create(null);
+
     for (const key of tags) {
       if (!Object.hasOwn(next, key)) {
         removed[key] = undefined;
         tags.delete(key);
       }
     }
+
     for (const key of Object.keys(next)) {
       tags.add(key);
     }
+
     sdk.setTags({ ...removed, ...next });
   };
 
@@ -42,6 +45,7 @@ export const createAmbientMirror = (sdk: SentryLike, parts: Parts) => {
         contexts.delete(name);
       }
     }
+
     for (const [name, context] of Object.entries(next)) {
       contexts.add(name);
       sdk.setContext(name, context);
@@ -52,22 +56,27 @@ export const createAmbientMirror = (sdk: SentryLike, parts: Parts) => {
     if (parts.user === true) {
       sdk.setUser(toSentryUser(snapshot.user));
     }
+
     if (parts.tags === true) {
       mirrorTags(snapshot.tags);
     }
+
     if (parts.contexts === true) {
       mirrorContexts(snapshot.contexts);
     }
 
     const changedAccount =
       generation !== null && generation !== snapshot.generation;
+
     generation = snapshot.generation;
+
     if (parts.breadcrumbs === true && changedAccount) {
       sdk.getIsolationScope().clearBreadcrumbs();
     }
   };
 
   const enabled = Object.values(parts).includes(true);
+
   const context: AmbientReporterContext | undefined = !enabled
     ? undefined
     : {
@@ -93,6 +102,7 @@ export const createAmbientMirror = (sdk: SentryLike, parts: Parts) => {
       if (parts.user === true) {
         sdk.setUser(null);
       }
+
       mirrorTags({});
       mirrorContexts({});
     },

@@ -56,11 +56,13 @@ export class FlareErrorBoundary extends Component<
 
   override componentDidCatch(error: unknown, info: ErrorInfo) {
     const flare = this.context;
+
     if (flare === undefined) {
       return;
     }
 
     const { capture, onError } = this.props;
+
     const receipt = flare.capture(error, {
       ...capture,
       contexts: {
@@ -72,6 +74,7 @@ export class FlareErrorBoundary extends Component<
     if (typeof onError !== "function") {
       return;
     }
+
     onError({ error, receipt });
   }
 
@@ -87,14 +90,17 @@ export class FlareErrorBoundary extends Component<
     }
 
     const { caught } = this.state;
+
     if (caught === null) {
       return this.props.children;
     }
 
     const { fallback } = this.props;
+
     if (typeof fallback !== "function") {
       return fallback;
     }
+
     return fallback({ error: caught.error, reset: this.handleReset });
   }
 }

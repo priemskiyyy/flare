@@ -8,10 +8,13 @@ const create = (
   ambient: NonNullable<Parameters<typeof sentry>[0]["ambient"]>,
 ) => {
   const fake = fakeSentry();
+
   const flare = new Flare({
     destinations: { sentry: sentry({ sdk: fake.sdk, ambient }) },
   });
+
   flare.start();
+
   return { fake, flare };
 };
 
@@ -27,19 +30,23 @@ const untouched = {
 test("removing a prototype-named tag reaches the SDK as an own undefined field", () => {
   const { fake, flare } = create({ tags: true });
   const setTags = vi.spyOn(fake.sdk, "setTags");
+
   flare.tag("__proto__", "value");
   flare.tag("__proto__", null);
 
   const removed = setTags.mock.calls.at(-1)?.[0];
+
   expect(Object.hasOwn(removed ?? {}, "__proto__")).toBe(true);
   expect(removed?.["__proto__"]).toBeUndefined();
 });
 
 test("without the ambient option nothing is ever mirrored into Sentry's global scope", () => {
   const fake = fakeSentry();
+
   const flare = new Flare({
     destinations: { sentry: sentry({ sdk: fake.sdk }) },
   });
+
   flare.start();
 
   flare.user({ id: "ada" });
@@ -99,6 +106,7 @@ test("the user is not mirrored when only other parts were asked for", () => {
 
 test("signing out and removing a tag or a context are mirrored too", () => {
   const { fake, flare } = create({ user: true, tags: true, contexts: true });
+
   flare.user({ id: "ada" });
   flare.tag("plan", "pro");
   flare.tag("area", "upload");
@@ -121,6 +129,7 @@ test("signing out and removing a tag or a context are mirrored too", () => {
 
 test("a report delivered after an account switch carries nothing the mirror wrote for the new account", () => {
   const fake = fakeSentry();
+
   const flare = new Flare({
     destinations: {
       sentry: sentry({
@@ -129,7 +138,9 @@ test("a report delivered after an account switch carries nothing the mirror wrot
       }),
     },
   });
+
   flare.user({ id: "ada" });
+
   const receipt = flare.capture(new Error("captured as ada, before start"));
 
   flare.user({ id: "grace" });
@@ -146,6 +157,7 @@ test("a report delivered after an account switch carries nothing the mirror wrot
 
 test("mirrored breadcrumbs are cleared from Sentry when the account changes", () => {
   const { fake, flare } = create({ breadcrumbs: true });
+
   flare.user({ id: "ada" });
   flare.breadcrumb("ada-opened-billing");
 
@@ -160,6 +172,7 @@ test("mirrored breadcrumbs are cleared from Sentry when the account changes", ()
 
 test("mirrored breadcrumbs are not added a second time to the events Flare submits", () => {
   const { fake, flare } = create({ breadcrumbs: true });
+
   flare.breadcrumb("opened");
 
   flare.capture(new Error("boom"));
@@ -169,11 +182,13 @@ test("mirrored breadcrumbs are not added a second time to the events Flare submi
 
 test("buffered reports carry the breadcrumbs captured before the mirror started", () => {
   const fake = fakeSentry();
+
   const flare = new Flare({
     destinations: {
       sentry: sentry({ sdk: fake.sdk, ambient: { breadcrumbs: true } }),
     },
   });
+
   flare.breadcrumb("before-start");
   flare.message("buffered");
   flare.breadcrumb("after-capture");
@@ -187,6 +202,7 @@ test("buffered reports carry the breadcrumbs captured before the mirror started"
 
 test("disposing a borrowed SDK removes what Flare mirrored and nothing else", () => {
   const { fake, flare } = create({ user: true, tags: true, contexts: true });
+
   fake.sdk.setTags({ release: "set by the application" });
   fake.sdk.setContext("app", { build: 7 });
   flare.user({ id: "ada" });

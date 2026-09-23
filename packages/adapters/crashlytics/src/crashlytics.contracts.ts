@@ -23,6 +23,7 @@ export const flare = new Flare({
 // does not wrap, such as opting a user into collection.
 export const instance: Crashlytics.Crashlytics | null =
   flare.destination("crashlytics").native;
+
 if (instance !== null) {
   Crashlytics.setCrashlyticsCollectionEnabled(instance, true).catch(() => {});
 }

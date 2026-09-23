@@ -26,6 +26,7 @@ export const FlareProvider = defineComponent(
       FLARE_CONTEXT,
       computed(() => props.flare),
     );
+
     return () => slots.default?.();
   },
   { name: "FlareProvider", props: ["flare"] },

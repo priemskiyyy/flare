@@ -13,8 +13,10 @@ import Status from "./Status.fixture.svelte";
 import StatusHarness from "./StatusHarness.fixture.svelte";
 
 const disposals: Array<() => void> = [];
+
 afterEach(() => {
   cleanup();
+
   for (const dispose of disposals.splice(0).reverse()) {
     dispose();
   }
@@ -23,27 +25,34 @@ afterEach(() => {
 const create = (options: Parameters<typeof createMockAdapter>[0] = {}) => {
   const mock = createMockAdapter(options);
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   disposals.push(flare.dispose);
+
   return { mock, flare };
 };
 
 // Counts live listeners, so a leak shows as a number that does not return to zero.
 const countListeners = (flare: ReturnType<typeof create>["flare"]) => {
   const live = { count: 0 };
+
   for (const observable of [
     flare.status,
     flare.destination("primary").status,
   ]) {
     const subscribe = observable.subscribe;
+
     vi.spyOn(observable, "subscribe").mockImplementation((listener) => {
       live.count += 1;
+
       const stop = subscribe(listener);
+
       return () => {
         live.count -= 1;
         stop();
       };
     });
   }
+
   return live;
 };
 
@@ -68,6 +77,7 @@ test("observing is passive: mounting the provider and every status utility opens
   const { mock, flare } = create();
 
   const view = render(StatusHarness, { flare });
+
   await tick();
 
   expect(view.container.textContent).toBe("idle/idle");
@@ -78,12 +88,15 @@ test("observing is passive: mounting the provider and every status utility opens
 
 test("the status utilities follow the runtime and one destination, to ready and to failed", async () => {
   const { flare } = create({ holdOpen: true });
+
   const failing = create({
     onOpen: () => {
       throw new Error("the SDK refused to start");
     },
   });
+
   const view = render(StatusHarness, { flare });
+
   await tick();
 
   flare.start();
@@ -98,14 +111,19 @@ test("the status utilities follow the runtime and one destination, to ready and 
 
 test("a destination name given as a getter is followed when it changes", async () => {
   const first = createMockAdapter();
+
   const second = createMockAdapter({
     available: { available: false, reason: "not here" },
   });
+
   const flare = new Flare({
     destinations: { primary: first.adapter, backup: second.adapter },
   });
+
   disposals.push(flare.dispose);
+
   const view = render(NamedHarness, { flare, name: "primary" });
+
   flare.start();
   await tick();
   expect(view.container.textContent).toBe("ready");
@@ -120,11 +138,13 @@ test("a status callback is told about later changes, and not about the value it 
   const { flare } = create();
   const flareChanges: FlareStatus[] = [];
   const destinationChanges: DestinationStatus[] = [];
+
   const view = render(ObservedHarness, {
     flare,
     onFlare: (status) => flareChanges.push(status),
     onDestination: (status) => destinationChanges.push(status),
   });
+
   await tick();
 
   flare.start();
@@ -140,10 +160,13 @@ test("a status callback is told about later changes, and not about the value it 
 
 test("before it is mounted a status reads idle, even for a Flare that already started", async () => {
   const { flare } = create();
+
   flare.start();
+
   const beforeMount: string[] = [];
 
   const view = render(EarlyHarness, { flare, beforeMount });
+
   await tick();
 
   // The server and the hydrating render see the same, so their markup matches.
@@ -155,6 +178,7 @@ test("unmounting stops observing and never starts, stops or disposes anything", 
   const { mock, flare } = create();
   const live = countListeners(flare);
   const view = render(StatusHarness, { flare });
+
   flare.start();
   await tick();
 
@@ -173,6 +197,7 @@ test("a provider given another Flare moves its listeners to it", async () => {
   const firstLive = countListeners(first.flare);
   const secondLive = countListeners(second.flare);
   const view = render(StatusHarness, { flare: first.flare });
+
   await tick();
   expect(firstLive.count).toBe(2);
 

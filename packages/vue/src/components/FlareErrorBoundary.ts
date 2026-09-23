@@ -65,10 +65,12 @@ export const FlareErrorBoundary = defineComponent(
       }
 
       const { capture, onError } = props;
+
       const receipt = flare.value.capture(error, {
         ...capture,
         contexts: { ...capture?.contexts, vue: { info } },
       });
+
       caught.value = { error };
 
       if (typeof onError === "function") {

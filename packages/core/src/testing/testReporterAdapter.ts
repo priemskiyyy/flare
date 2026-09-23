@@ -24,9 +24,11 @@ const deepFreeze = <TValue>(value: TValue): TValue => {
   if (typeof value !== "object" || value === null) {
     return value;
   }
+
   for (const nested of Object.values(value)) {
     deepFreeze(nested);
   }
+
   return Object.freeze(value);
 };
 
@@ -115,9 +117,11 @@ export const testReporterAdapter = ({
 }: ReporterConformanceOptions) => {
   const open = async (): Promise<ReporterSession | null> => {
     const adapter = createAdapter();
+
     if (!adapter.available().available) {
       return null;
     }
+
     return adapter.open({ destination: "conformance" });
   };
 
@@ -151,6 +155,7 @@ export const testReporterAdapter = ({
         adapter.capabilities.filtering,
       );
       expect(typeof adapter.capabilities.messages).toBe("boolean");
+
       for (const field of [
         "user",
         "tags",
@@ -159,6 +164,7 @@ export const testReporterAdapter = ({
       ] as const) {
         expect(typeof adapter.capabilities.eventLocal[field]).toBe("boolean");
       }
+
       if (!availability.available) {
         expect(typeof availability.reason).toBe("string");
       }
@@ -174,9 +180,11 @@ export const testReporterAdapter = ({
 
     test("capabilities match the methods the session has", async () => {
       const session = await open();
+
       if (session === null) {
         return;
       }
+
       const { capabilities } = createAdapter();
 
       expect(typeof session.submit).toBe("function");
@@ -189,6 +197,7 @@ export const testReporterAdapter = ({
 
     test("the native handle keeps its identity across reads", async () => {
       const session = await open();
+
       if (session === null) {
         return;
       }
@@ -199,9 +208,11 @@ export const testReporterAdapter = ({
 
     test("an exception is answered with a valid result and the report is left untouched", async () => {
       const session = await open();
+
       if (session === null) {
         return;
       }
+
       const report = exceptionReport();
       const before = JSON.stringify(report);
 
@@ -217,9 +228,11 @@ export const testReporterAdapter = ({
 
     test("evidence is never stronger than the capabilities declare", async () => {
       const session = await open();
+
       if (session === null) {
         return;
       }
+
       const { capabilities } = createAdapter();
 
       const result = parseSubmissionResult(
@@ -231,14 +244,17 @@ export const testReporterAdapter = ({
           EVIDENCE_STRENGTH[capabilities.evidence],
         );
       }
+
       await session.dispose();
     });
 
     test("a message is sent as a message, or honestly skipped, never reported as a fake Error", async () => {
       const session = await open();
+
       if (session === null) {
         return;
       }
+
       const { capabilities } = createAdapter();
       const report = messageReport();
       const before = JSON.stringify(report);
@@ -249,17 +265,20 @@ export const testReporterAdapter = ({
 
       expect(result).not.toBeNull();
       expect(JSON.stringify(report)).toBe(before);
+
       if (!capabilities.messages) {
         expect(result).toEqual({
           status: "skipped",
           reason: "unsupported-report-kind",
         });
       }
+
       await session.dispose();
     });
 
     test("flush, where supported, answers with a valid result", async () => {
       const session = await open();
+
       if (session === null || typeof session.flush !== "function") {
         return;
       }
@@ -275,6 +294,7 @@ export const testReporterAdapter = ({
 
     test("disposal is idempotent", async () => {
       const session = await open();
+
       if (session === null) {
         return;
       }
@@ -286,26 +306,32 @@ export const testReporterAdapter = ({
 
     test("submit and flush are refused after disposal, and ambient calls are silent", async () => {
       const session = await open();
+
       if (session === null) {
         return;
       }
+
       await session.dispose();
 
       const submitted = await settled(() =>
         session.submit(exceptionReport(), submissionContext()),
       );
+
       expect(submitted.threw).toBe(true);
 
       const { flush, ambient } = session;
+
       if (typeof flush === "function") {
         const flushed = await settled(() =>
           flush({ timeoutMs: 100, signal: new AbortController().signal }),
         );
+
         expect(flushed.threw).toBe(true);
       }
 
       const snapshot = { generation: 2, user: null, tags: {}, contexts: {} };
       const crumb = { name: "after-dispose", data: null, timestamp: 1 };
+
       expect(() => {
         ambient?.session?.(snapshot);
         ambient?.breadcrumb?.(crumb);
@@ -314,11 +340,15 @@ export const testReporterAdapter = ({
 
     test("every open yields an independent session", async () => {
       const adapter = createAdapter();
+
       if (!adapter.available().available) {
         return;
       }
+
       const first = await adapter.open({ destination: "conformance" });
+
       await first.dispose();
+
       const second = await adapter.open({ destination: "conformance" });
 
       const result = parseSubmissionResult(

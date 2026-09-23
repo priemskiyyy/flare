@@ -12,16 +12,19 @@ afterEach(async () => {
 
 test("the real SDK keeps a buffered report independent of the account mirrored at delivery", async () => {
   const events: Sentry.Event[] = [];
+
   Sentry.init({
     dsn: "https://key@example.test/1",
     defaultIntegrations: [],
     sendClientReports: false,
     beforeSend: (event) => {
       events.push(event);
+
       return null;
     },
   });
   Sentry.setContext("application", { build: 7 });
+
   const flare = new Flare({
     destinations: {
       sentry: sentry({
@@ -30,9 +33,12 @@ test("the real SDK keeps a buffered report independent of the account mirrored a
       }),
     },
   });
+
   flare.user({ id: "ada" });
   flare.breadcrumb("ada-opened");
+
   const receipt = flare.message("captured under ada");
+
   flare.user({ id: "grace", email: "grace@example.test" });
   flare.tag("plan", "grace-plan");
   flare.context("workspace", { owner: "grace" });

@@ -17,12 +17,15 @@ afterEach(cleanup);
 
 const create = () => {
   const mock = createMockAdapter();
+
   const flare = new Flare({
     destinations: { primary: mock.adapter },
     // Object identity dedupe would hide a boundary that captured twice.
     dedupe: { windowMs: 0 },
   });
+
   flare.start();
+
   return { mock, flare };
 };
 
@@ -61,6 +64,7 @@ test("the component stack travels as the react context", () => {
   );
 
   const context = mock.submissions[0]?.report.contexts.react;
+
   expect(Object.keys(context ?? {})).toEqual(["componentStack"]);
   expect(String(context?.componentStack)).toContain("Broken");
 });
@@ -128,8 +132,10 @@ test("contexts given to the boundary travel beside the react context, not instea
 
 test("a fallback function receives the error and a reset that renders the children again", () => {
   const { mock, flare } = create();
+
   const Flaky = () => {
     const [attempts, setAttempts] = useState(0);
+
     return (
       <FlareErrorBoundary
         fallback={({ error, reset }) => (

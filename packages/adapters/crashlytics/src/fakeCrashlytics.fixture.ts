@@ -14,6 +14,7 @@ type Recorded = {
  */
 export const fakeCrashlytics = () => {
   const instance = { name: "fake crashlytics instance" };
+
   const state: {
     userId: string;
     attributes: Record<string, string>;
@@ -29,6 +30,7 @@ export const fakeCrashlytics = () => {
     rejectSetters: false,
     recordFailure: null,
   };
+
   const recorded: Recorded[] = [];
   const calls = { getCrashlytics: 0, setAttributes: 0, setUserId: 0 };
 
@@ -40,12 +42,14 @@ export const fakeCrashlytics = () => {
   const sdk = {
     getCrashlytics: () => {
       calls.getCrashlytics += 1;
+
       return instance;
     },
     recordError: (_crashlytics: typeof instance, error: Error) => {
       if (state.recordFailure !== null) {
         throw state.recordFailure;
       }
+
       recorded.push({
         error,
         userId: state.userId,
@@ -62,11 +66,13 @@ export const fakeCrashlytics = () => {
     ) => {
       calls.setAttributes += 1;
       Object.assign(state.attributes, attributes);
+
       return answer();
     },
     setUserId: (_crashlytics: typeof instance, userId: string) => {
       calls.setUserId += 1;
       state.userId = userId;
+
       return answer();
     },
   };

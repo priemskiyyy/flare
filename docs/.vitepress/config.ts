@@ -3,30 +3,37 @@ import { join } from "node:path";
 import { defineConfig } from "vitepress";
 
 const siteUrl = process.env.DOCS_SITE_URL;
+
 const repositoryUrl =
   process.env.DOCS_REPOSITORY_URL ?? "https://github.com/priemskiyyy/flare";
+
 const base =
   process.env.DOCS_BASE_PATH ?? (siteUrl ? new URL(siteUrl).pathname : "/");
+
 const description =
   "Provider-independent error reporting for TypeScript. One API over Sentry, Bugsnag, Crashlytics, your own backend and the console, with account boundaries, redaction, typed routing and honest receipts.";
 
 // llms.txt lists every guide with its description; llms-full.txt inlines them.
 const writeLlmsText = async (srcDir: string, outDir: string) => {
   const origin = siteUrl ? siteUrl.replace(/\/$/, "") : base.replace(/\/$/, "");
+
   const files = (await readdir(srcDir, { recursive: true }))
     .filter((file) => file.endsWith(".md"))
     .filter((file) => !file.startsWith(".vitepress"))
     .filter((file) => file !== "README.md" && file !== "index.md")
     .sort();
+
   const pages = await Promise.all(
     files.map(async (file) => {
       const source = await readFile(join(srcDir, file), "utf8");
       const title = source.match(/^# (.+)$/m)?.[1] ?? file;
       const summary = source.match(/^description: "(.+)"$/m)?.[1] ?? "";
       const url = `${origin}/${file.replace(/\.md$/, "")}`;
+
       return { title, summary, url, source };
     }),
   );
+
   const index = [
     "# Flare",
     "",
@@ -39,9 +46,11 @@ const writeLlmsText = async (srcDir: string, outDir: string) => {
     ),
     "",
   ].join("\n");
+
   const full = pages
     .map(({ url, source }) => `<!-- ${url} -->\n${source.trim()}`)
     .join("\n\n---\n\n");
+
   await writeFile(join(outDir, "llms.txt"), index);
   await writeFile(join(outDir, "llms-full.txt"), `${full}\n`);
 };
@@ -66,6 +75,7 @@ export default defineConfig({
     const sitemap = siteUrl
       ? `Sitemap: ${new URL("sitemap.xml", `${siteUrl.replace(/\/$/, "")}/`).href}\n`
       : "";
+
     await writeFile(
       join(outDir, "robots.txt"),
       `User-agent: *\nAllow: /\n${sitemap}`,
@@ -75,6 +85,7 @@ export default defineConfig({
   transformHead: ({ pageData }) => {
     const title =
       pageData.title === "Flare" ? "Flare" : `${pageData.title} | Flare`;
+
     const head: [string, Record<string, string>][] = [
       ["meta", { property: "og:title", content: title }],
       [
@@ -93,6 +104,7 @@ export default defineConfig({
         },
       ],
     ];
+
     // Without a site URL the build omits canonical URLs rather than assume a host.
     if (!siteUrl) {
       return head;
@@ -101,11 +113,14 @@ export default defineConfig({
     const pagePath = pageData.relativePath
       .replace(/(^|\/)index\.md$/, "$1")
       .replace(/\.md$/, "");
+
     const url = new URL(pagePath, `${siteUrl.replace(/\/$/, "")}/`).href;
+
     head.push(
       ["link", { rel: "canonical", href: url }],
       ["meta", { property: "og:url", content: url }],
     );
+
     return head;
   },
   srcExclude: ["README.md"],

@@ -110,17 +110,22 @@ test("the sanitized payload is inspectable without opening the browser console",
   press("Report payment failure");
 
   const payload = await screen.findByLabelText("Sanitized payload");
+
   expect(payload.textContent).toContain("[Redacted]");
   expect(payload.textContent).not.toContain("tok_live_123");
 });
 
 test("unmounting cancels an unfinished upload before it reports", async () => {
   vi.useFakeTimers();
+
   const events: string[] = [];
+
   const stop = flare.diagnostics.events.subscribe((event) =>
     events.push(event.type),
   );
+
   const application = renderApplication();
+
   press("Start upload");
 
   application.unmount();

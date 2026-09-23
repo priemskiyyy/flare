@@ -32,7 +32,9 @@ export const createDevtools = ({
       initialIsOpen,
       maxEvents,
     });
+
     devtools.mount(element);
+
     return devtools.unmount;
   };
 };

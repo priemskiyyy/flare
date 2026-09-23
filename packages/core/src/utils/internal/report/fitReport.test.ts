@@ -39,6 +39,7 @@ test("an oversized report sheds its oldest breadcrumbs first", () => {
     breadcrumbs: [crumb("first"), crumb("second"), crumb("third")],
     contexts: { upload: { attempt: 1 } },
   });
+
   // One breadcrumb serializes to roughly 150 characters, so shedding one is enough.
   const limit = sizeOf(original) - 100;
 
@@ -105,6 +106,7 @@ test("losses added while fitting a report cannot be rewritten", () => {
     report({ contexts: { request: { attempt: 1 } } }),
     1,
   );
+
   for (const loss of fitted.losses) {
     Reflect.set(loss, "path", "changed");
   }

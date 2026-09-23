@@ -8,15 +8,18 @@ import StatusHarness from "../utilities/StatusHarness.fixture.svelte";
 
 test("server rendering is inert: it reads idle, subscribes to nothing, opens nothing and reports nothing", () => {
   expect(typeof window).toBe("undefined");
+
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
   const subscribe = vi.spyOn(flare.status, "subscribe");
+
   const destinationSubscribe = vi.spyOn(
     flare.destination("primary").status,
     "subscribe",
   );
 
   const { body } = render(StatusHarness, { props: { flare } });
+
   const boundary = render(BoundaryHarness, {
     props: { flare, isBroken: () => false },
   });
@@ -34,6 +37,7 @@ test("a Flare that was started on the server still renders idle, so the client c
   const flare = new Flare({
     destinations: { primary: createMockAdapter().adapter },
   });
+
   flare.start();
 
   const { body } = render(StatusHarness, { props: { flare } });
@@ -46,6 +50,7 @@ test("a Flare that was started on the server still renders idle, so the client c
 test("on the server a boundary catches nothing: the error leaves render, and reporting it is the caller's job", () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
 
   // Rendering is lazy, so the error surfaces when the markup is read.

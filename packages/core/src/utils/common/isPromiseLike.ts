@@ -5,5 +5,6 @@ export const isPromiseLike = (
   if (typeof value !== "object" || value === null) {
     return false;
   }
+
   return "then" in value && typeof value.then === "function";
 };

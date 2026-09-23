@@ -36,6 +36,7 @@ test("prototype-named destinations retain their receipts and flush results", asy
 test("prototype-named tags and contexts remain own report fields", () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
   flare.tag("__proto__", "tag value");
   flare.context("__proto__", { value: "context value" });
@@ -51,6 +52,7 @@ test("prototype-named tags and contexts remain own report fields", () => {
 
 test("constructing a Flare is cold: nothing opens, no timer starts, no global is touched", () => {
   vi.useFakeTimers();
+
   const mock = createMockAdapter();
 
   const flare = new Flare({ destinations: { primary: mock.adapter } });
@@ -84,10 +86,12 @@ test("destination registration uses the same adapter that passed ownership valid
   const first = createMockAdapter();
   const second = createMockAdapter();
   let reads = 0;
+
   const flare = new Flare({
     destinations: {
       get first() {
         reads += 1;
+
         return reads === 1 ? first.adapter : second.adapter;
       },
       second: second.adapter,
@@ -105,6 +109,7 @@ test("destination registration uses the same adapter that passed ownership valid
 test("start opens every destination once, however often it is called", () => {
   const first = createMockAdapter();
   const second = createMockAdapter();
+
   const flare = new Flare({
     destinations: { first: first.adapter, second: second.adapter },
   });
@@ -122,11 +127,14 @@ test("starting again tells no status observer anything, because nothing changed"
   const flare = new Flare({ destinations: { primary: mock.adapter } });
   const listener = vi.fn();
   const events: string[] = [];
+
   flare.status.subscribe(listener);
   flare.diagnostics.events.subscribe((event) => events.push(event.type));
 
   flare.start();
+
   const started = flare.status.get();
+
   flare.start();
 
   expect(listener).toHaveBeenCalledTimes(1);
@@ -159,12 +167,15 @@ test("a report captured before start is delivered once the destination is ready"
 
 test("capture is synchronous and its receipt never rejects, whatever the provider does", async () => {
   const failure = new Error("sdk threw");
+
   const mock = createMockAdapter({
     onSubmit: () => {
       throw failure;
     },
   });
+
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
 
   const receipt = flare.capture(new Error("boom"));
@@ -178,6 +189,7 @@ test("capture is synchronous and its receipt never rejects, whatever the provide
 test("a message is a real report, not a fake Error", () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
 
   flare.message("Unexpected payment state", { level: "warning" });
@@ -193,12 +205,15 @@ test("a message is a real report, not a fake Error", () => {
 test("the adapter receives frozen data and never the thrown value itself", () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
+
   const thrown = Object.assign(new Error("boom"), { secret: "token" });
 
   flare.capture(thrown);
 
   const report = mock.submissions[0]?.report;
+
   expect(Object.isFrozen(report)).toBe(true);
   expect(JSON.stringify(report)).not.toContain("token");
   expect(report).not.toHaveProperty("secret");
@@ -206,16 +221,21 @@ test("the adapter receives frozen data and never the thrown value itself", () =>
 
 test("a failed start can be retried without losing what was captured meanwhile", () => {
   let attempts = 0;
+
   const mock = createMockAdapter({
     onOpen: () => {
       attempts += 1;
+
       if (attempts === 1) {
         throw new Error("init failed");
       }
     },
   });
+
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
+
   const receipt = flare.capture(new Error("during outage"));
 
   expect(flare.destination("primary").status.get()).toMatchObject({
@@ -249,11 +269,13 @@ test("the destination handle is passive and typed by the adapter's native handle
 test("disposal is idempotent, releases every session, and later captures are dropped", async () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
 
   flare.dispose();
   flare.dispose();
   flare.start();
+
   const receipt = flare.capture(new Error("after dispose"));
 
   expect(mock.sessions[0]?.disposeCount).toBe(1);
@@ -268,6 +290,7 @@ test("disposal is idempotent, releases every session, and later captures are dro
 test("disposal during a slow start releases the session when it finally arrives", async () => {
   const mock = createMockAdapter({ holdOpen: true });
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
 
   flare.dispose();
@@ -283,7 +306,9 @@ test("disposal during a slow start releases the session when it finally arrives"
 test("disposal during a submission settles its receipt as indeterminate", async () => {
   const mock = createMockAdapter({ hold: true });
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
+
   const receipt = flare.capture(new Error("in flight"));
 
   flare.dispose();
@@ -297,6 +322,7 @@ test("disposal during a submission settles its receipt as indeterminate", async 
 test("setters after disposal are silent", () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.dispose();
 
   expect(() => {
@@ -309,6 +335,7 @@ test("setters after disposal are silent", () => {
 
 test("methods stay bound when passed around", () => {
   const mock = createMockAdapter();
+
   const { start, capture, tag } = new Flare({
     destinations: { primary: mock.adapter },
   });
@@ -353,18 +380,24 @@ test("a misconfigured Flare fails at construction, where a developer will see it
 test("default routing uses the names read and validated at construction", () => {
   const mock = createMockAdapter();
   const selected: "primary"[] = ["primary"];
+
   const readName = vi
     .fn()
     .mockReturnValueOnce("primary")
     .mockReturnValue("typo");
+
   Object.defineProperty(selected, "0", { get: readName });
+
   const readDefault = vi.fn(() => selected);
   const readRoute = vi.fn(() => undefined);
+
   const options = Object.defineProperties(
     { destinations: { primary: mock.adapter } },
     { default: { get: readDefault }, route: { get: readRoute } },
   );
+
   const flare = new Flare(options);
+
   flare.start();
 
   const receipt = flare.message("Request failed");
@@ -381,6 +414,7 @@ test("two destinations that drive the same singleton SDK are rejected before any
   const sdk = { name: "process-wide sdk" };
   const first = { ...createMockAdapter().adapter, singleton: sdk };
   const second = { ...createMockAdapter().adapter, singleton: sdk };
+
   const other = {
     ...createMockAdapter().adapter,
     singleton: { name: "another sdk" },
@@ -395,6 +429,7 @@ test("two destinations that drive the same singleton SDK are rejected before any
 test("every report gets its own id", () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
 
   const first = flare.capture(new Error("one"));
@@ -411,6 +446,7 @@ test("disposing from a starting observer prevents the adapter from opening", () 
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
   const { status } = flare.destination("primary");
+
   status.subscribe(() => {
     if (status.get().state === "starting") {
       flare.dispose();
@@ -443,12 +479,14 @@ test("disposing while the startup buffer drains stops the remaining submissions"
 
 test("disposing from the availability probe cannot revive the destination", () => {
   const mock = createMockAdapter();
+
   const flare = new Flare({
     destinations: {
       primary: {
         ...mock.adapter,
         available: () => {
           flare.dispose();
+
           return { available: true };
         },
       },
@@ -466,6 +504,7 @@ test("disposing from the availability probe cannot revive the destination", () =
 test("disposing from a submission diagnostic prevents the provider call", async () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.diagnostics.events.subscribe((event) => {
     if (event.type === "destination submit") {
       flare.dispose();

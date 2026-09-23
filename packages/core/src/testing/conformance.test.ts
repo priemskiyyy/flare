@@ -50,6 +50,7 @@ testReporterAdapter({
           if (report.kind === "message") {
             return { status: "skipped", reason: "unsupported-report-kind" };
           }
+
           return Promise.resolve({
             status: "submitted",
             evidence: "sdk-call-returned",

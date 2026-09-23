@@ -17,7 +17,9 @@ export class ValueStore<TValue> implements ObservableValue<TValue> {
     }
 
     const snapshot = { value: nextValue };
+
     this.#snapshot = snapshot;
+
     for (const listener of [...this.#listeners]) {
       // A nested update has already notified listeners of the latest snapshot.
       if (snapshot !== this.#snapshot) {
@@ -35,6 +37,7 @@ export class ValueStore<TValue> implements ObservableValue<TValue> {
   subscribe = (notify: () => void) => {
     // Each subscription owns its slot, even when callers reuse a callback.
     const listener = () => notify();
+
     this.#listeners.add(listener);
 
     return () => {

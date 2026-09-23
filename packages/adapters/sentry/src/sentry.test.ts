@@ -11,6 +11,7 @@ const create = (
   const flare = new Flare({
     destinations: { sentry: sentry({ sdk: fake.sdk, ...options }) },
   });
+
   return { fake, flare };
 };
 
@@ -25,12 +26,14 @@ const untouched = {
 
 test("prototype-named report metadata remains own event data", () => {
   const { fake, flare } = create();
+
   flare.start();
   flare.tag("__proto__", "tag value");
   flare.context("__proto__", { value: "context value" });
   flare.message("metadata");
 
   const scope = fake.events[0]?.scope;
+
   expect(Object.hasOwn(scope?.tags ?? {}, "__proto__")).toBe(true);
   expect(scope?.tags["__proto__"]).toBe("tag value");
   expect(JSON.stringify(scope?.contexts)).toBe(
@@ -50,15 +53,18 @@ test("creating the adapter calls nothing on the SDK", () => {
 
 test("an exception reaches Sentry as an Error rebuilt from the sanitized report", async () => {
   const { fake, flare } = create();
+
   flare.start();
   class UploadError extends Error {
     override name = "UploadError";
   }
+
   const thrown = new UploadError("upload failed");
 
   const status = await flare.capture(thrown).settled;
 
   const event = fake.events[0];
+
   expect(event?.kind === "exception" ? event.exception : null).toBeInstanceOf(
     Error,
   );
@@ -83,6 +89,7 @@ test("an exception reaches Sentry as an Error rebuilt from the sanitized report"
 
 test("the cause chain is rebuilt so Sentry can link the errors", () => {
   const { fake, flare } = create();
+
   flare.start();
 
   flare.capture(
@@ -93,6 +100,7 @@ test("the cause chain is rebuilt so Sentry can link the errors", () => {
 
   const event = fake.events[0];
   const top = event?.kind === "exception" ? event.exception : null;
+
   expect(top).toMatchObject({
     message: "upload failed",
     cause: {
@@ -104,11 +112,13 @@ test("the cause chain is rebuilt so Sentry can link the errors", () => {
 
 test("a thrown value without a stack gets a header only, never frames that point into the adapter", () => {
   const { fake, flare } = create();
+
   flare.start();
 
   flare.capture("string rejection");
 
   const event = fake.events[0];
+
   expect(event?.kind === "exception" ? event.exception : null).toMatchObject({
     name: "NonError",
     stack: "NonError: string rejection",
@@ -117,6 +127,7 @@ test("a thrown value without a stack gets a header only, never frames that point
 
 test("user, tags, contexts, breadcrumbs, level and operation are applied to a forked scope", () => {
   const { fake, flare } = create();
+
   flare.start();
   flare.user({ id: "ada", email: "ada@example.com", name: "Ada" });
   flare.breadcrumb("uploadStarted", { kind: "avatar" });
@@ -148,10 +159,12 @@ test("user, tags, contexts, breadcrumbs, level and operation are applied to a fo
 
 test("breadcrumb time is converted to the seconds Sentry expects", () => {
   const fake = fakeSentry();
+
   const flare = new Flare({
     destinations: { sentry: sentry({ sdk: fake.sdk }) },
     now: () => 1_767_225_600_500,
   });
+
   flare.start();
   flare.breadcrumb("opened");
 
@@ -164,6 +177,7 @@ test("breadcrumb time is converted to the seconds Sentry expects", () => {
 
 test("submit never touches the scope that provider-owned events are sent with", () => {
   const { fake, flare } = create();
+
   flare.start();
   flare.user({ id: "ada" });
   flare.tag("plan", "pro");
@@ -182,6 +196,7 @@ test("submit never touches the scope that provider-owned events are sent with", 
 
 test("concurrent reports for different accounts never share a scope", () => {
   const { fake, flare } = create();
+
   flare.start();
 
   flare.capture(new Error("as ada"), {
@@ -202,6 +217,7 @@ test("concurrent reports for different accounts never share a scope", () => {
 
 test("a report Flare says is anonymous does not inherit the user on Sentry's global scope", () => {
   const { fake, flare } = create();
+
   flare.start();
   // The application, or a previous session, left a user on the global scope.
   fake.sdk.setUser({ id: "left-behind" });
@@ -214,6 +230,7 @@ test("a report Flare says is anonymous does not inherit the user on Sentry's glo
 
 test("a message is a Sentry message with its level, not a fake exception", () => {
   const { fake, flare } = create();
+
   flare.start();
 
   flare.message("Unexpected payment state", { level: "warning" });
@@ -227,6 +244,7 @@ test("a message is a Sentry message with its level, not a fake exception", () =>
 
 test("aggregated errors travel as a context, since Sentry has no field for them", () => {
   const { fake, flare } = create();
+
   flare.start();
 
   flare.capture(
@@ -245,7 +263,9 @@ test("aggregated errors travel as a context, since Sentry has no field for them"
 
 test("tags Sentry would cut or refuse are reported as losses", async () => {
   const { flare } = create();
+
   flare.start();
+
   const longKey = "k".repeat(33);
 
   const status = await flare.capture(new Error("boom"), {
@@ -266,6 +286,7 @@ test("tags Sentry would cut or refuse are reported as losses", async () => {
 
 test("metadata replaced by Flare's report id and aggregate errors is reported as a loss", async () => {
   const { fake, flare } = create();
+
   flare.start();
 
   const receipt = flare.capture(
@@ -314,6 +335,7 @@ test("a borrowed SDK that is not initialized fails to start, and a retry after t
 
 test("a borrowed SDK is never initialized and never closed by Flare", () => {
   const { fake, flare } = create();
+
   flare.start();
 
   flare.dispose();
@@ -339,6 +361,7 @@ test("an owned SDK is initialized when the destination opens and closed when it 
 
 test("flush waits for the SDK's queue and reports a timeout honestly", async () => {
   const { fake, flare } = create();
+
   flare.start();
 
   await expect(flare.flush({ timeoutMs: 300 })).resolves.toEqual({
@@ -372,6 +395,7 @@ test("the capabilities say what the browser SDK can honestly do", () => {
 
 test("the native handle is the SDK the application injected", () => {
   const { fake, flare } = create();
+
   flare.start();
 
   expect(flare.destination("sentry").native).toBe(fake.sdk);

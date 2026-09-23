@@ -17,6 +17,7 @@ const area: StandardSchema<"upload" | "editor"> = {
       if (value === "upload" || value === "editor") {
         return { value };
       }
+
       return { issues: [{ message: "unknown area" }] };
     },
   },
@@ -25,11 +26,14 @@ const area: StandardSchema<"upload" | "editor"> = {
 test("redaction runs before the startup buffer, the mock, diagnostics and fan-out ever see the data", () => {
   const first = createMockAdapter();
   const second = createMockAdapter();
+
   const flare = new Flare({
     destinations: { first: first.adapter, second: second.adapter },
     privacy: { scrub: (text) => text.replaceAll(SECRET, "[key]") },
   });
+
   const events: FlareDiagnosticEvent[] = [];
+
   flare.diagnostics.events.subscribe((event) => events.push(event));
   flare.user({ id: "ada" });
   flare.context("request", {
@@ -46,6 +50,7 @@ test("redaction runs before the startup buffer, the mock, diagnostics and fan-ou
   const delivered = [...first.submissions, ...second.submissions].map(
     (submission) => submission.report,
   );
+
   expect(delivered).toHaveLength(2);
   expect(JSON.stringify(delivered)).not.toContain(SECRET);
   expect(JSON.stringify(events)).not.toContain(SECRET);
@@ -60,6 +65,7 @@ test("redaction runs before the startup buffer, the mock, diagnostics and fan-ou
 
 test("a scrubber that throws fails closed: the report is dropped, not sent unscrubbed", async () => {
   const mock = createMockAdapter();
+
   const flare = new Flare({
     destinations: { primary: mock.adapter },
     privacy: {
@@ -68,6 +74,7 @@ test("a scrubber that throws fails closed: the report is dropped, not sent unscr
       },
     },
   });
+
   flare.start();
 
   await expect(flare.capture(new Error("boom")).settled).resolves.toEqual({
@@ -84,6 +91,7 @@ test("a scrubber that throws fails closed: the report is dropped, not sent unscr
 test("a scrubber that throws on session data costs that data and never the host", () => {
   let explode = true;
   const mock = createMockAdapter();
+
   const flare = new Flare({
     destinations: { primary: mock.adapter },
     privacy: {
@@ -91,10 +99,12 @@ test("a scrubber that throws on session data costs that data and never the host"
         if (explode) {
           throw new Error("scrubber exploded");
         }
+
         return text;
       },
     },
   });
+
   flare.start();
 
   expect(() => {
@@ -115,7 +125,9 @@ test("a schema failure costs only the invalid piece and is recorded on the repor
   const mock = createMockAdapter();
   const schema = { tags: { area } } satisfies FlareSchema;
   const flare = new Flare({ destinations: { primary: mock.adapter }, schema });
+
   flare.start();
+
   const tags = JSON.parse('{"area":"billing"}');
 
   flare.capture(new Error("still reported"), { tags });
@@ -130,12 +142,15 @@ test("a schema failure costs only the invalid piece and is recorded on the repor
 test("capture reads each metadata option only once", () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
+
   const tags = vi.fn(() => ({ area: "upload" }));
   const contexts = vi.fn(() => ({ request: { attempt: 1 } }));
   const user = vi.fn(() => ({ id: "ada" }));
   const operation = vi.fn(() => "upload");
   const level = vi.fn(() => "warning");
+
   const options = Object.defineProperties(
     {},
     {
@@ -156,14 +171,17 @@ test("capture reads each metadata option only once", () => {
     operation: "upload",
     level: "warning",
   });
+
   for (const read of [tags, contexts, user, operation, level]) {
     expect(read).toHaveBeenCalledTimes(1);
   }
+
   flare.dispose();
 });
 
 test("an oversized report is cut down to its limits and says what it lost", () => {
   const mock = createMockAdapter();
+
   const flare = new Flare({
     destinations: { primary: mock.adapter },
     privacy: {
@@ -175,15 +193,19 @@ test("an oversized report is cut down to its limits and says what it lost", () =
       },
     },
   });
+
   flare.start();
+
   for (const step of ["one", "two", "three"]) {
     flare.breadcrumb(step, { pad: "p".repeat(150) });
   }
+
   const error = new Error("m".repeat(500));
 
   flare.capture(error, { contexts: { big: { blob: "b".repeat(400) } } });
 
   const report = mock.submissions[0]?.report;
+
   expect(report).toMatchObject({ exception: { message: "m".repeat(20) } });
   expect(
     report?.kind === "exception" ? report.exception.stack?.length : 0,
@@ -201,15 +223,21 @@ test("an oversized report is cut down to its limits and says what it lost", () =
 test("hostile thrown values are reported, never thrown back at the application", async () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
+
   const circular = new Error("circular");
+
   circular.cause = circular;
+
   const getter = new Error("getter");
+
   Object.defineProperty(getter, "message", {
     get: () => {
       throw new Error("getter exploded");
     },
   });
+
   const hostile = [
     circular,
     getter,
@@ -234,6 +262,7 @@ test("hostile thrown values are reported, never thrown back at the application",
 test("default redaction applies without any configuration", () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
 
   flare.capture(new Error("boom"), {
@@ -248,6 +277,7 @@ test("default redaction applies without any configuration", () => {
 test("schema inputs are transformed once before every metadata layer is retained", () => {
   const parseAttempt = vi.fn((input: string) => Number(input));
   const mock = createMockAdapter();
+
   const flare = new Flare({
     destinations: { primary: mock.adapter },
     schema: {
@@ -261,10 +291,13 @@ test("schema inputs are transformed once before every metadata layer is retained
     },
     defaults: { tags: { attempt: "1" } },
   });
+
   flare.tag("attempt", "2");
   flare.context("upload", "avatar");
   flare.breadcrumb("opened");
+
   const scope = flare.scope({ tags: { attempt: "3" } });
+
   scope.capture(new Error("first"), { tags: { attempt: "4" } });
   scope.message("second");
   flare.start();
@@ -279,6 +312,7 @@ test("schema inputs are transformed once before every metadata layer is retained
     { attempt: 4 },
     { attempt: 3 },
   ]);
+
   for (const { report } of mock.submissions) {
     expect(report.contexts).toEqual({
       upload: { id: "avatar", token: "[Redacted]" },
@@ -288,5 +322,6 @@ test("schema inputs are transformed once before every metadata layer is retained
     ]);
     expect(report.losses).toEqual([]);
   }
+
   flare.dispose();
 });

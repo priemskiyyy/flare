@@ -19,6 +19,7 @@ const upload: StandardSchema<Record<string, unknown>> = {
       if (typeof value === "object" && value !== null && "attempt" in value) {
         return { value: { attempt: value.attempt } };
       }
+
       return { issues: [{ message: "attempt is required" }] };
     },
   },

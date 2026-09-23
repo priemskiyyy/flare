@@ -23,6 +23,7 @@ const schema = {
 const untyped = new Flare({
   destinations: { primary: createMockAdapter().adapter },
 });
+
 const typed = new Flare({
   destinations: { primary: createMockAdapter().adapter },
   schema,

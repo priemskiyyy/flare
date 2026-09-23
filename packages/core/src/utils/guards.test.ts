@@ -9,13 +9,18 @@ afterEach(() => {
 
 test("the same Error captured twice in quick succession is sent once, and again later", async () => {
   vi.useFakeTimers();
+
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
+
   const error = new Error("reused");
 
   flare.capture(error);
+
   const duplicate = flare.capture(error);
+
   vi.advanceTimersByTime(1_500);
   flare.capture(error);
 
@@ -29,6 +34,7 @@ test("the same Error captured twice in quick succession is sent once, and again 
 test("equal messages are separate occurrences", () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
 
   flare.message("Unexpected payment state");
@@ -40,9 +46,11 @@ test("equal messages are separate occurrences", () => {
 test("an explicit dedupe key holds per destination and per identity", () => {
   const first = createMockAdapter();
   const second = createMockAdapter();
+
   const flare = new Flare({
     destinations: { first: first.adapter, second: second.adapter },
   });
+
   flare.start();
   flare.user({ id: "ada" });
 
@@ -70,12 +78,15 @@ test("a capture made from inside an adapter's submit is refused, so a feedback l
       }>["capture"]
     >
   > = [];
+
   const mock = createMockAdapter({
     onSubmit: () => {
       receipts.push(flare.capture(new Error("logged while submitting")));
     },
   });
+
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
 
   flare.capture(new Error("original"));
@@ -90,6 +101,7 @@ test("a capture made from inside an adapter's submit is refused, so a feedback l
 test("a capture made after an adapter's submit has returned is an ordinary capture", () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
 
   flare.capture(new Error("first"));
@@ -100,13 +112,18 @@ test("a capture made after an adapter's submit has returned is an ordinary captu
 
 test("an error storm is cut off per minute, announced once, and let through again afterwards", async () => {
   vi.useFakeTimers();
+
   const mock = createMockAdapter();
+
   const flare = new Flare({
     destinations: { primary: mock.adapter },
     limits: { reportsPerMinute: 3 },
   });
+
   flare.start();
+
   const announced = vi.fn();
+
   flare.diagnostics.events.subscribe((event) => {
     if (event.type === "rate limit reached") {
       announced();

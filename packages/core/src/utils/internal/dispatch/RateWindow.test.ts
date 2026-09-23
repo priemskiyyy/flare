@@ -20,6 +20,7 @@ test("a new minute admits again", () => {
 
 test("only the first refusal of a window is marked, so a storm is announced once", () => {
   const window = new RateWindow({ perMinute: 1 });
+
   window.admit(0);
 
   expect(window.admit(1)).toBe("refused-first");

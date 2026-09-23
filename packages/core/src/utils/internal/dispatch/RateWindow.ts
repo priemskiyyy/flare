@@ -21,6 +21,7 @@ export class RateWindow {
     }
 
     this.#count += 1;
+
     if (this.#count <= this.#perMinute) {
       return "admitted";
     }
@@ -28,6 +29,7 @@ export class RateWindow {
     if (this.#count === this.#perMinute + 1) {
       return "refused-first";
     }
+
     return "refused";
   };
 }

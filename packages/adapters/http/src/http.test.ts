@@ -11,6 +11,7 @@ afterEach(() => {
 
 const create = (options: Partial<Parameters<typeof http>[0]> = {}) => {
   const backend = fakeBackend();
+
   const flare = new Flare({
     destinations: {
       backend: http({
@@ -20,12 +21,15 @@ const create = (options: Partial<Parameters<typeof http>[0]> = {}) => {
       }),
     },
   });
+
   return { backend, flare };
 };
 
 test("creating the adapter sends nothing and does not look for a fetch", () => {
   const fetch = vi.fn();
+
   vi.stubGlobal("fetch", fetch);
+
   const backend = fakeBackend();
 
   http({ endpoint: backend.endpoint });
@@ -37,11 +41,13 @@ test("creating the adapter sends nothing and does not look for a fetch", () => {
 
 test("a report is posted as JSON with its id as the idempotency key", async () => {
   const { backend, flare } = create();
+
   flare.start();
 
   const receipt = flare.capture(new Error("upload failed"), {
     tags: { area: "upload" },
   });
+
   await receipt.settled;
 
   expect(backend.requests).toHaveLength(1);
@@ -63,6 +69,7 @@ test("a report is posted as JSON with its id as the idempotency key", async () =
 
 test("an acknowledged report is submitted with backend evidence and the backend's id", async () => {
   const { flare } = create();
+
   flare.start();
 
   await expect(flare.capture(new Error("boom")).settled).resolves.toEqual({
@@ -80,6 +87,7 @@ test("an acknowledged report is submitted with backend evidence and the backend'
 
 test("an injected response keeps the event id it read once", async () => {
   const id = vi.fn().mockReturnValueOnce("event-1").mockReturnValue(42);
+
   const { flare } = create({
     fetch: async () => ({
       ok: true,
@@ -87,6 +95,7 @@ test("an injected response keeps the event id it read once", async () => {
       json: async () => Object.defineProperty({}, "id", { get: id }),
     }),
   });
+
   flare.start();
 
   await expect(flare.message("acknowledged").settled).resolves.toMatchObject({
@@ -103,6 +112,7 @@ test.each([
   "an acknowledgement with $label is still submitted, without an event id",
   async (row) => {
     const { backend, flare } = create();
+
     flare.start();
     backend.answerNext(200, row.body);
 
@@ -116,6 +126,7 @@ test.each([
 
 test("a refusal is a failure that names the status, and it is never retried", async () => {
   const { backend, flare } = create();
+
   flare.start();
   backend.answerNext(503);
 
@@ -135,6 +146,7 @@ test("a refusal is a failure that names the status, and it is never retried", as
 test("an unreachable network is a failure too, and it is never retried", async () => {
   const offline = new TypeError("fetch failed");
   const { backend, flare } = create();
+
   flare.start();
   backend.failNext(offline);
 
@@ -147,12 +159,15 @@ test("an unreachable network is a failure too, and it is never retried", async (
 
 test("headers may be a function, awaited for every request so nothing it reads is stale", async () => {
   let version = 0;
+
   const { backend, flare } = create({
     headers: async () => {
       version += 1;
+
       return { "x-app-version": `build-${version}` };
     },
   });
+
   flare.start();
 
   await flare.capture(new Error("one")).settled;
@@ -166,6 +181,7 @@ test("headers may be a function, awaited for every request so nothing it reads i
 test("authorize is asked for the credentials of the account the report belongs to", async () => {
   const authorize = vi.fn(() => ({ authorization: "Bearer ada-token" }));
   const { backend, flare } = create({ authorize });
+
   flare.start();
   flare.user({ id: "ada" });
 
@@ -189,9 +205,11 @@ test("header precedence is case insensitive, including credentials and protocol 
       "IDEMPOTENCY-KEY": "account-key",
     }),
   });
+
   flare.start();
 
   const receipt = flare.message("hello");
+
   await receipt.settled;
 
   expect(backend.requests[0]?.headers).toEqual({
@@ -206,10 +224,12 @@ test("an account switch while reading credential headers stops the request", asy
     authorize: () => ({
       get authorization() {
         flare.user({ id: "grace" });
+
         return "Bearer grace-token";
       },
     }),
   });
+
   flare.start();
   flare.user({ id: "ada" });
 
@@ -226,7 +246,9 @@ test("an account switch while reading credential headers stops the request", asy
 test("a report buffered under one account is never sent with the next account's credentials", async () => {
   const authorize = vi.fn(() => ({ authorization: "Bearer grace-token" }));
   const { backend, flare } = create({ authorize });
+
   flare.user({ id: "ada" });
+
   const receipt = flare.capture(new Error("captured as ada, before start"));
 
   flare.user({ id: "grace" });
@@ -244,13 +266,17 @@ test("a report buffered under one account is never sent with the next account's 
 
 test("an account switch while credentials are being fetched stops the request", async () => {
   let release: (headers: Record<string, string>) => void = () => {};
+
   const authorize = () =>
     new Promise<Record<string, string>>((resolve) => {
       release = resolve;
     });
+
   const { backend, flare } = create({ authorize });
+
   flare.start();
   flare.user({ id: "ada" });
+
   const receipt = flare.capture(new Error("captured as ada"));
 
   flare.user({ id: "grace" });
@@ -267,12 +293,16 @@ test("an account switch while credentials are being fetched stops the request", 
 
 test("disposal while headers are pending prevents authorization and sending", async () => {
   let release = () => {};
+
   const headers = new Promise<Record<string, string>>((resolve) => {
     release = () => resolve({ "x-build": "1" });
   });
+
   const authorize = vi.fn(() => ({}));
   const { backend, flare } = create({ headers: () => headers, authorize });
+
   flare.start();
+
   const receipt = flare.message("pending headers");
 
   flare.dispose();
@@ -285,11 +315,15 @@ test("disposal while headers are pending prevents authorization and sending", as
 
 test("disposal while credentials are pending prevents sending", async () => {
   let release = () => {};
+
   const credentials = new Promise<Record<string, string>>((resolve) => {
     release = () => resolve({ authorization: "test" });
   });
+
   const { backend, flare } = create({ authorize: () => credentials });
+
   flare.start();
+
   const receipt = flare.message("pending credentials");
 
   flare.dispose();
@@ -301,7 +335,9 @@ test("disposal while credentials are pending prevents sending", async () => {
 
 test("without authorize there are no credentials to cross, so a buffered report is still sent under its own identity", async () => {
   const { backend, flare } = create();
+
   flare.user({ id: "ada" });
+
   const receipt = flare.capture(new Error("captured as ada, before start"));
 
   flare.user({ id: "grace" });
@@ -315,17 +351,21 @@ test("without authorize there are no credentials to cross, so a buffered report 
 
 test("the deadline aborts the request and leaves the outcome indeterminate", async () => {
   vi.useFakeTimers();
+
   const backend = fakeBackend();
+
   const flare = new Flare({
     destinations: {
       backend: http({ endpoint: backend.endpoint, fetch: backend.fetch }),
     },
     deadlineMs: 1_000,
   });
+
   flare.start();
   backend.hangNext();
 
   const receipt = flare.capture(new Error("slow backend"));
+
   await vi.advanceTimersByTimeAsync(1_000);
 
   await expect(receipt.settled).resolves.toEqual({
@@ -337,6 +377,7 @@ test("the deadline aborts the request and leaves the outcome indeterminate", asy
 
 test("where there is no fetch the destination is unavailable, and an injected one makes it available", () => {
   vi.stubGlobal("fetch", undefined);
+
   const backend = fakeBackend();
 
   expect(http({ endpoint: backend.endpoint }).available()).toEqual({
@@ -353,7 +394,9 @@ test("where there is no fetch the destination is unavailable, and an injected on
 
 test("a fetch installed after the adapter was created is honoured", async () => {
   vi.stubGlobal("fetch", undefined);
+
   const backend = fakeBackend();
+
   const flare = new Flare({
     destinations: { backend: http({ endpoint: backend.endpoint }) },
   });
@@ -367,6 +410,7 @@ test("a fetch installed after the adapter was created is honoured", async () => 
 
 test("the native handle names the endpoint", () => {
   const { backend, flare } = create();
+
   flare.start();
 
   expect(flare.destination("backend").native).toEqual({

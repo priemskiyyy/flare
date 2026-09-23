@@ -39,6 +39,7 @@ export const formatContextSummary = (value: unknown) => {
   }
 
   const lossCount = Array.isArray(losses) ? losses.length : losses;
+
   if (typeof lossCount === "number" && lossCount > 0) {
     parts.push(count(lossCount, "loss"));
   }

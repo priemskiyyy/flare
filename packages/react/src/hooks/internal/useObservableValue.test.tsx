@@ -8,20 +8,24 @@ import { useObservableValue } from "src/hooks/internal/useObservableValue";
 const createStore = (initial: number) => {
   let value = initial;
   const listeners = new Set<() => void>();
+
   const store: ObservableValue<number> = {
     get: () => value,
     subscribe: (listener) => {
       listeners.add(listener);
+
       return () => {
         listeners.delete(listener);
       };
     },
   };
+
   return {
     store,
     listeners,
     set: (next: number) => {
       value = next;
+
       for (const listener of [...listeners]) {
         listener();
       }
@@ -33,6 +37,7 @@ test("the optional callback adds a listener only while present and reads the lat
   const { store, listeners, set } = createStore(1);
   const first = vi.fn();
   const second = vi.fn();
+
   const { result, rerender } = renderHook(
     ({ onChange }: { onChange?: (value: number) => void }) =>
       useObservableValue(store, () => 0, onChange),

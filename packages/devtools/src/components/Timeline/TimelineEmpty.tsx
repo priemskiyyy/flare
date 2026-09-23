@@ -21,6 +21,7 @@ const getEmptyStateVariant = (
 /** Explains why no rows show: filters hide them, recording is paused, or nothing happened yet. */
 export const TimelineEmpty = () => {
   const timeline = useTimeline();
+
   const variant = () =>
     getEmptyStateVariant(timeline.filters.isFiltered(), timeline.isPaused());
 

@@ -3,6 +3,7 @@ import { appendFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 
 const root = new URL("../", import.meta.url);
 const changelog = readFileSync(new URL("CHANGELOG.md", root), "utf8");
+
 const packages = Object.fromEntries(
   ["packages", "packages/adapters"].flatMap((group) =>
     readdirSync(new URL(group, root))
@@ -16,6 +17,7 @@ const packages = Object.fromEntries(
             "utf8",
           ),
         );
+
         return [
           metadata.name,
           { directory: `${group}/${directory}`, metadata },
@@ -23,7 +25,9 @@ const packages = Object.fromEntries(
       }),
   ),
 );
+
 const tag = process.env.RELEASE_TAG;
+
 // A release tag names its package: `<name>-v<version>`. The version always
 // starts with a digit, so a name ending in `-v...` is not mistaken for one.
 const fromTag =
@@ -34,13 +38,17 @@ const fromTag =
           (name) => name.split("/").at(-1) === tag.replace(/-v\d[\w.+-]*$/, ""),
         ) ?? tag,
       ];
+
 const selected = [...process.argv.slice(2), ...fromTag];
 const names = selected.length === 0 ? Object.keys(packages) : selected;
 
 for (const name of names) {
   const configuration = packages[name];
+
   assert(configuration, `Unknown release package: ${name}`);
+
   const { metadata, directory } = configuration;
+
   assert.equal(metadata.license, "MIT");
   assert.equal(
     metadata.repository.url,
@@ -53,9 +61,11 @@ for (const name of names) {
   );
   assert.equal(metadata.publishConfig.access, "public");
   assert.match(metadata.version, /^\d+\.\d+\.\d+(?:-[\w.-]+)?$/);
+
   const entry = changelog
     .split("\n")
     .find((line) => line.startsWith(`## ${name} ${metadata.version} - `));
+
   assert(entry, `${name} ${metadata.version} needs a changelog entry.`);
 
   if (tag !== undefined) {

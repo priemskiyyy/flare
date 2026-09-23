@@ -18,15 +18,18 @@ export const prepareTags = (
 
   for (const [key, raw] of Object.entries(tags)) {
     const validation = validateDeclared(declared, key, raw);
+
     if (!validation.valid || !isTagValue(validation.value)) {
       losses.push({ path: `tags.${key}`, reason: "invalid" });
       continue;
     }
+
     accepted[key] = validation.value;
   }
 
   const sanitized = sanitizeValue(accepted, "tags", policy);
   const value: Record<string, TagValue> = Object.create(null);
+
   if (isRecord(sanitized.value)) {
     for (const [key, tag] of Object.entries(sanitized.value)) {
       if (isTagValue(tag)) {

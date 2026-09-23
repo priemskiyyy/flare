@@ -112,21 +112,25 @@ export const createMockAdapter = (options: MockAdapterOptions = {}) => {
       ambient: { sessions: [], breadcrumbs: [] },
       disposeCount: 0,
     };
+
     sessions.push(record);
 
     const submit: ReporterSession["submit"] = (report, context) => {
       const answer = deferred<SubmissionResult>();
+
       const submission: MockSubmission = {
         report,
         context,
         settle: (result = SUBMITTED) => answer.resolve(result),
         fail: answer.reject,
       };
+
       record.submissions.push(submission);
       submissions.push(submission);
 
       if (typeof options.onSubmit === "function") {
         const answered = options.onSubmit(submission);
+
         if (answered !== undefined) {
           return answered;
         }
@@ -135,11 +139,13 @@ export const createMockAdapter = (options: MockAdapterOptions = {}) => {
       if (options.hold === true) {
         return answer.promise;
       }
+
       return SUBMITTED;
     };
 
     const flush: NonNullable<ReporterSession["flush"]> = (context) => {
       const answer = deferred<FlushResult>();
+
       record.flushes.push({
         context,
         settle: (result = { status: "flushed" }) => answer.resolve(result),
@@ -149,6 +155,7 @@ export const createMockAdapter = (options: MockAdapterOptions = {}) => {
       if (options.flush === "hold") {
         return answer.promise;
       }
+
       return { status: "flushed" };
     };
 
@@ -182,6 +189,7 @@ export const createMockAdapter = (options: MockAdapterOptions = {}) => {
     available: () => options.available ?? { available: true },
     open: (context) => {
       const answer = deferred<ReporterSession<MockSession>>();
+
       const opening: MockOpening = {
         context,
         settle: () => answer.resolve(createSession()),
@@ -192,11 +200,13 @@ export const createMockAdapter = (options: MockAdapterOptions = {}) => {
       if (typeof options.onOpen === "function") {
         options.onOpen(opening);
       }
+
       openings.push(opening);
 
       if (options.holdOpen === true) {
         return answer.promise;
       }
+
       return createSession();
     },
   };

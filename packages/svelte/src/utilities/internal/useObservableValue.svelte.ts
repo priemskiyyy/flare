@@ -17,6 +17,7 @@ export const useObservableValue = <TValue>(
 
   $effect(() => {
     const current = observable();
+
     snapshot = current.get();
 
     return current.subscribe(() => {
@@ -31,6 +32,7 @@ export const useObservableValue = <TValue>(
 
     // A listener of its own, so a callback that throws cannot disturb the snapshot.
     const current = observable();
+
     return current.subscribe(() => onChange(current.get()));
   });
 

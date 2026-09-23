@@ -13,6 +13,7 @@ import {
 const Status = () => {
   const status = useFlareStatus();
   const primary = useDestinationStatus("primary");
+
   return (
     <span>
       {status().state}/{primary().state}
@@ -22,9 +23,11 @@ const Status = () => {
 
 test("server rendering is inert: it reads idle, subscribes to nothing, opens nothing and reports nothing", () => {
   expect(typeof window).toBe("undefined");
+
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
   const subscribe = vi.spyOn(flare.status, "subscribe");
+
   const destinationSubscribe = vi.spyOn(
     flare.destination("primary").status,
     "subscribe",
@@ -51,6 +54,7 @@ test("a Flare that was started on the server still renders idle, so the client c
   const flare = new Flare({
     destinations: { primary: createMockAdapter().adapter },
   });
+
   flare.start();
 
   const html = renderToString(() => (
@@ -67,7 +71,9 @@ test("a Flare that was started on the server still renders idle, so the client c
 test("an error thrown while rendering on the server is reported through that Flare, and the fallback is rendered", async () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
+
   const Broken = (): never => {
     throw new Error("the server could not render this");
   };

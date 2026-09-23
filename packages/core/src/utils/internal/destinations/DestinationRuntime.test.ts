@@ -25,9 +25,11 @@ const reportOf = (
     operation: null,
     losses: [],
   };
+
   if (kind === "message") {
     return { ...base, kind, message: id };
   }
+
   return {
     ...base,
     kind,
@@ -66,6 +68,7 @@ const create = (
 ) => {
   const mock = createMockAdapter(options);
   const depth = { enter: vi.fn(), exit: vi.fn() };
+
   const runtime = new DestinationRuntime({
     name: "primary",
     adapter: mock.adapter,
@@ -81,7 +84,9 @@ const create = (
     record: () => {},
     changed: () => {},
   });
+
   const outcomes = new Map<string, DestinationOutcome[]>();
+
   const accept = (id: string, kind: "message" | "exception" = "message") => {
     outcomes.set(id, []);
     runtime.accept({
@@ -89,6 +94,7 @@ const create = (
       settle: (outcome) => outcomes.get(id)?.push(outcome),
     });
   };
+
   return { mock, runtime, accept, outcomes, depth };
 };
 
@@ -114,8 +120,10 @@ test("an observed destination status cannot prevent startup", () => {
 
 test("a status observer cannot rewrite an opening destination", async () => {
   const { mock, runtime } = create({ holdOpen: true });
+
   runtime.status.subscribe(() => {
     const status = runtime.status.get();
+
     if (status.state === "starting") {
       Reflect.set(status, "state", "disposed");
     }
@@ -131,8 +139,10 @@ test("a status observer cannot rewrite an opening destination", async () => {
 test("a ready status cannot rewrite another destination's status", () => {
   const first = create();
   const second = create();
+
   first.runtime.start();
   second.runtime.start();
+
   const status = first.runtime.status.get();
 
   try {
@@ -173,6 +183,7 @@ test("an unavailable destination is never opened and skips what it is given", ()
   const { mock, runtime, accept, outcomes } = create({
     available: { available: false, reason: "no native module" },
   });
+
   accept("before");
 
   runtime.start();
@@ -193,6 +204,7 @@ test("an unavailable destination is never opened and skips what it is given", ()
 
 test("reports accepted before ready are buffered and submitted in order", () => {
   const { mock, runtime, accept, outcomes } = create();
+
   accept("first");
   accept("second");
 
@@ -211,6 +223,7 @@ test("reports accepted before ready are buffered and submitted in order", () => 
 
 test("a full buffer drops its oldest report and says so", () => {
   const { runtime, accept, outcomes } = create({}, { maxReports: 2 });
+
   accept("first");
   accept("second");
   accept("third");
@@ -223,7 +236,9 @@ test("a full buffer drops its oldest report and says so", () => {
 
 test("a buffered report that grows too old is dropped, so its receipt can settle", () => {
   vi.useFakeTimers();
+
   const { accept, outcomes } = create({}, { maxAgeMs: 1_000 });
+
   accept("old");
   vi.advanceTimersByTime(600);
   accept("young");
@@ -245,14 +260,17 @@ test("a buffered report that grows too old is dropped, so its receipt can settle
 test("a start that throws leaves the destination failed and keeps its buffer for a retry", () => {
   let attempts = 0;
   const failure = new Error("init failed");
+
   const { runtime, accept, outcomes } = create({
     onOpen: () => {
       attempts += 1;
+
       if (attempts === 1) {
         throw failure;
       }
     },
   });
+
   accept("kept");
 
   runtime.start();
@@ -270,6 +288,7 @@ test("a throwing then getter on an opened session cannot escape startup", () => 
   const { mock, runtime } = create();
   const open = mock.adapter.open;
   const failure = new Error("cannot inspect session");
+
   mock.adapter.open = (context) =>
     Object.defineProperty(open(context), "then", {
       get: () => {
@@ -284,6 +303,7 @@ test("a throwing then getter on an opened session cannot escape startup", () => 
 test("a start that rejects behaves the same, and a retry can succeed", async () => {
   const failure = new Error("init rejected");
   const { mock, runtime, accept, outcomes } = create({ holdOpen: true });
+
   accept("kept");
 
   runtime.start();
@@ -303,6 +323,7 @@ test("a start that rejects behaves the same, and a retry can succeed", async () 
 
 test("a report that expires while start has failed is skipped as start-failed", async () => {
   vi.useFakeTimers();
+
   const { runtime, accept, outcomes } = create(
     {
       onOpen: () => {
@@ -311,6 +332,7 @@ test("a report that expires while start has failed is skipped as start-failed", 
     },
     { maxAgeMs: 1_000 },
   );
+
   accept("stuck");
   runtime.start();
 
@@ -323,6 +345,7 @@ test("a report that expires while start has failed is skipped as start-failed", 
 
 test("a held submission settles with what the provider answers", async () => {
   const { mock, runtime, accept, outcomes } = create({ hold: true });
+
   runtime.start();
   accept("report");
 
@@ -351,18 +374,22 @@ test("a provider that rejects, throws, or answers nonsense is a failure of that 
   const rejection = new Error("network down");
   const thrown = new Error("sdk threw");
   const rejecting = create({ hold: true });
+
   const throwing = create({
     onSubmit: () => {
       throw thrown;
     },
   });
+
   const nonsense = create({
     onSubmit: () => JSON.parse('{"status":"delivered"}'),
   });
+
   for (const each of [rejecting, throwing, nonsense]) {
     each.runtime.start();
     each.accept("report");
   }
+
   rejecting.mock.submissions[0]?.fail(rejection);
   await flushMicrotasks();
 
@@ -380,6 +407,7 @@ test("a provider that rejects, throws, or answers nonsense is a failure of that 
 
 test("a provider result with a throwing then getter fails only its own report", () => {
   const failure = new Error("cannot read then");
+
   const { runtime, accept, outcomes } = create({
     onSubmit: () => ({
       ...SUBMITTED_RESULT,
@@ -388,6 +416,7 @@ test("a provider result with a throwing then getter fails only its own report", 
       },
     }),
   });
+
   runtime.start();
 
   expect(() => accept("report")).not.toThrow();
@@ -406,6 +435,7 @@ test.each([
   "a throwing $field getter is contained after asynchronous submission $held",
   async ({ held, field }) => {
     const failure = new Error("cannot read result");
+
     const result =
       field === "status"
         ? {
@@ -422,16 +452,20 @@ test.each([
               },
             },
           };
+
     const { runtime, accept, outcomes, mock } = create({
       hold: held,
       onSubmit: () => (held ? undefined : result),
     });
+
     runtime.start();
 
     expect(() => accept("report")).not.toThrow();
+
     if (held) {
       mock.submissions[0]?.settle(result);
     }
+
     await flushMicrotasks();
     expect(outcomes.get("report")).toEqual([
       { status: "failed", error: failure },
@@ -442,10 +476,12 @@ test.each([
 
 test("a hanging provider is cut off at the deadline as indeterminate, and its late answer is ignored", async () => {
   vi.useFakeTimers();
+
   const { mock, runtime, accept, outcomes } = create(
     { hold: true },
     { deadlineMs: 5_000 },
   );
+
   runtime.start();
   accept("slow");
 
@@ -470,6 +506,7 @@ test("a message is skipped, not faked, where the provider cannot carry messages"
   const { mock, runtime, accept, outcomes } = create({
     capabilities: { messages: false },
   });
+
   runtime.start();
 
   accept("note", "message");
@@ -485,6 +522,7 @@ test("a message is skipped, not faked, where the provider cannot carry messages"
 
 test("the adapter is told the current identity generation and its synchronous work is bracketed", () => {
   const { mock, runtime, accept, depth } = create({ hold: true });
+
   runtime.start();
 
   accept("report");
@@ -496,9 +534,12 @@ test("the adapter is told the current identity generation and its synchronous wo
 
 test("disposal settles everything it holds and refuses what comes later", async () => {
   const { mock, runtime, accept, outcomes } = create({ hold: true });
+
   runtime.start();
   accept("in-flight");
+
   const idle = create();
+
   idle.accept("buffered");
 
   runtime.dispose();
@@ -528,6 +569,7 @@ test("disposal settles everything it holds and refuses what comes later", async 
 
 test("a session that arrives after disposal is released at once and never used", async () => {
   const { mock, runtime, accept } = create({ holdOpen: true });
+
   runtime.start();
   runtime.dispose();
 
@@ -553,8 +595,11 @@ test.each([
   },
 ])("a session whose disposal $label cannot break the host", async (row) => {
   const unhandled = vi.fn();
+
   process.on("unhandledRejection", unhandled);
+
   const mock = createMockAdapter();
+
   const runtime = new DestinationRuntime({
     name: "primary",
     adapter: {
@@ -574,6 +619,7 @@ test.each([
     record: () => {},
     changed: () => {},
   });
+
   runtime.start();
 
   expect(() => runtime.dispose()).not.toThrow();
@@ -587,6 +633,7 @@ test.each([
 test("flush says not-ready before start and unsupported where the adapter has no flush", async () => {
   const idle = create();
   const bare = create();
+
   bare.runtime.start();
 
   await expect(idle.runtime.flush(100)).resolves.toEqual({
@@ -601,10 +648,12 @@ test("flush says not-ready before start and unsupported where the adapter has no
 
 test("flush waits for work accepted before the call and not for work accepted after", async () => {
   const { mock, runtime, accept } = create({ hold: true, flush: true });
+
   runtime.start();
   accept("before");
 
   const flushed = runtime.flush(1_000);
+
   accept("after");
   mock.submissions[0]?.settle();
 
@@ -618,11 +667,14 @@ test("flush waits for work accepted before the call and not for work accepted af
 
 test("a flush that runs out of time says timeout and never claims the work was lost", async () => {
   vi.useFakeTimers();
+
   const { runtime, accept } = create({ hold: true, flush: true });
+
   runtime.start();
   accept("stuck");
 
   const flushed = runtime.flush(200);
+
   await vi.advanceTimersByTimeAsync(200);
 
   await expect(flushed).resolves.toEqual({
@@ -633,10 +685,13 @@ test("a flush that runs out of time says timeout and never claims the work was l
 
 test("a held provider flush is bounded by the same timeout", async () => {
   vi.useFakeTimers();
+
   const { mock, runtime } = create({ flush: "hold" });
+
   runtime.start();
 
   const flushed = runtime.flush(200);
+
   await vi.advanceTimersByTimeAsync(200);
 
   await expect(flushed).resolves.toEqual({
@@ -648,6 +703,7 @@ test("a held provider flush is bounded by the same timeout", async () => {
 
 test("ambient state is pushed when the destination becomes ready and whenever asked", () => {
   const { mock, runtime } = create({ ambient: true });
+
   runtime.start();
 
   runtime.syncAmbient({

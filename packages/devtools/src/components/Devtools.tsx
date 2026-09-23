@@ -24,6 +24,7 @@ const DEFAULT_SIZE = { bottom: 420, right: 520 } satisfies Record<
   PanelPosition,
   number
 >;
+
 const PREFERENCES_KEY = "@priemskiyyy/flare-devtools";
 
 export type DevtoolsProps = {
@@ -40,14 +41,17 @@ export const Devtools = (props: DevtoolsProps) => {
     parsePreferences,
     {},
   );
+
   const [state, setState] = createSignal(
     initialDevtoolsState(preferences().isOpen ?? props.initialIsOpen),
   );
+
   const snapshot = useObservableValue(() => props.flare().diagnostics);
   const events = useObservableValue(() => props.log);
   const panel = createMemo(() => state().panel);
   const isPaused = createMemo(() => state().isPaused);
   const position = createMemo(() => preferences().position ?? "bottom");
+
   const size = createMemo(() => {
     const { height, width } = preferences();
 
@@ -55,6 +59,7 @@ export const Devtools = (props: DevtoolsProps) => {
       ? (height ?? DEFAULT_SIZE.bottom)
       : (width ?? DEFAULT_SIZE.right);
   });
+
   const hasUnseenError = createMemo(() => {
     const current = panel();
 
@@ -70,12 +75,16 @@ export const Devtools = (props: DevtoolsProps) => {
   const dispatch = (action: DevtoolsAction) => {
     setState((current) => devtoolsReducer(current, action));
   };
+
   const handleSizeChange = (next: number) => {
     const key = position() === "bottom" ? "height" : "width";
+
     setPreferences({ ...preferences(), [key]: next });
   };
+
   const handleDock = () => {
     const next: PanelPosition = position() === "bottom" ? "right" : "bottom";
+
     setPreferences({ ...preferences(), position: next });
   };
 
@@ -89,12 +98,14 @@ export const Devtools = (props: DevtoolsProps) => {
     }
 
     const { diagnostics } = props.flare();
+
     onCleanup(diagnostics.events.subscribe(props.log.add));
   });
 
   // Only the panel state is tracked here; reading the preferences would re-run this on its own write.
   createEffect(() => {
     const isOpen = panel().status === "OPEN";
+
     setPreferences({ ...untrack(preferences), isOpen });
   });
 

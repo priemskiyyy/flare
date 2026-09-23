@@ -20,6 +20,7 @@ const area: StandardSchema<TagValue> = {
       if (value === "upload" || value === "editor") {
         return { value };
       }
+
       return { issues: [{ message: "unknown area" }] };
     },
   },

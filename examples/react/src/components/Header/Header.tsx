@@ -16,9 +16,11 @@ export const Header = () => {
 
   const handleAccountChange = (next: FlareUser | null) => {
     flare.user(next);
+
     if (next !== null) {
       flare.breadcrumb("signedIn", { name: next.name ?? next.id });
     }
+
     setUser(next);
   };
 

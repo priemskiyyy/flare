@@ -31,6 +31,7 @@ test("observing diagnostics is passive: it opens nothing and creates no report",
 test("the snapshot holds counts and statuses, never report content", () => {
   const mock = createMockAdapter({ name: "mocked", hold: true });
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.user({ id: "ada" });
   flare.breadcrumb("opened");
   flare.capture(new Error("buffered"));
@@ -65,17 +66,21 @@ test.each(["destination", "diagnostics"])(
   (view) => {
     const mock = createMockAdapter();
     const flare = new Flare({ destinations: { primary: mock.adapter } });
+
     flare.start();
+
     const capabilities =
       view === "destination"
         ? flare.destination("primary").capabilities
         : flare.diagnostics.get().destinations[0]?.capabilities;
+
     if (capabilities === undefined) {
       throw new Error("The destination must expose its capabilities.");
     }
 
     Reflect.set(capabilities, "messages", false);
     Reflect.set(capabilities.eventLocal, "contexts", false);
+
     const receipt = flare.message("Request failed");
 
     expect(receipt.status.get()).toMatchObject({
@@ -116,17 +121,21 @@ test.each(["active", "disposed"])(
   (state) => {
     const mock = createMockAdapter();
     const flare = new Flare({ destinations: { primary: mock.adapter } });
+
     if (state === "disposed") {
       flare.dispose();
     }
+
     const snapshot = flare.diagnostics.get();
     const expected = structuredClone(snapshot);
 
     Reflect.set(snapshot, "pendingReceipts", 42);
+
     for (const destination of snapshot.destinations) {
       Reflect.set(destination, "name", "changed");
       Reflect.set(destination, "buffered", 42);
     }
+
     Reflect.set(snapshot.destinations, "length", 0);
 
     expect(flare.diagnostics.get()).toBe(snapshot);
@@ -139,12 +148,14 @@ test("the timeline names what happened to a report from acceptance to outcome", 
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
   const events: FlareDiagnosticEvent[] = [];
+
   flare.diagnostics.events.subscribe((event) => events.push(event));
   flare.start();
   flare.user({ id: "ada" });
 
   const receipt = flare.capture(new Error("boom"));
   const stale = flare.scope({});
+
   flare.user(null);
   stale.capture(new Error("stale"));
   flare.dispose();
@@ -178,7 +189,9 @@ test("the timeline names what happened to a report from acceptance to outcome", 
 test("pending receipts return to zero once reports settle", async () => {
   const mock = createMockAdapter({ hold: true });
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
+
   const receipt = flare.capture(new Error("boom"));
 
   expect(flare.diagnostics.get().pendingReceipts).toBe(1);
@@ -193,11 +206,14 @@ test("pending receipts return to zero once reports settle", async () => {
 test("a diagnostic listener cannot change the destinations a receipt waits for", () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.diagnostics.events.subscribe((event) => {
     if (!isRecord(event.context)) {
       return;
     }
+
     const { destinations } = event.context;
+
     if (event.type === "report accepted" && Array.isArray(destinations)) {
       destinations.push("unselected");
     }
@@ -222,7 +238,9 @@ test("a diagnostic listener cannot change the destinations a receipt waits for",
 
 test("every outcome a destination gives is announced, whichever path it took", async () => {
   vi.useFakeTimers();
+
   const ready = createMockAdapter({ capabilities: { messages: false } });
+
   const lossy = createMockAdapter({
     onSubmit: () => ({
       status: "submitted",
@@ -231,15 +249,19 @@ test("every outcome a destination gives is announced, whichever path it took", a
       losses: [{ path: "breadcrumbs", reason: "unsupported" }],
     }),
   });
+
   const failing = createMockAdapter({
     onSubmit: () => {
       throw new Error("sdk threw");
     },
   });
+
   const hanging = createMockAdapter({ hold: true });
+
   const unavailable = createMockAdapter({
     available: { available: false, reason: "not on this platform" },
   });
+
   const flare = new Flare({
     destinations: {
       ready: ready.adapter,
@@ -250,9 +272,12 @@ test("every outcome a destination gives is announced, whichever path it took", a
     },
     deadlineMs: 1_000,
   });
+
   const events: FlareDiagnosticEvent[] = [];
+
   flare.diagnostics.events.subscribe((event) => events.push(event));
   flare.start();
+
   const error = new Error("boom");
 
   flare.capture(error);
@@ -276,18 +301,25 @@ test("every outcome a destination gives is announced, whichever path it took", a
 
 test("what happens to a buffered report is announced too: held, overflowed, expired, submitted and disposed", async () => {
   vi.useFakeTimers();
+
   const mock = createMockAdapter();
+
   const flare = new Flare({
     destinations: { primary: mock.adapter },
     buffer: { maxReports: 1, maxAgeMs: 1_000 },
   });
+
   const events: FlareDiagnosticEvent[] = [];
+
   flare.diagnostics.events.subscribe((event) => events.push(event));
 
   const overflowed = flare.capture(new Error("pushed out"));
   const expired = flare.capture(new Error("grows old"));
+
   await vi.advanceTimersByTimeAsync(1_000);
+
   const submitted = flare.capture(new Error("waits for start"));
+
   flare.start();
   flare.dispose();
 
@@ -295,6 +327,7 @@ test("what happens to a buffered report is announced too: held, overflowed, expi
     events
       .filter((event) => event.report === id && event.source === "destination")
       .map((event) => [event.type, event.context]);
+
   expect(forReport(overflowed.id)).toEqual([
     ["report buffered", { buffered: 1 }],
     [
@@ -318,13 +351,16 @@ test("what happens to a buffered report is announced too: held, overflowed, expi
 
 test("an event never carries an error object or report content, only its shape", () => {
   const secret = "sk_live_12345";
+
   const mock = createMockAdapter({
     onSubmit: () => {
       throw new Error(`provider echoed ${secret}`);
     },
   });
+
   const flare = new Flare({ destinations: { primary: mock.adapter } });
   const events: FlareDiagnosticEvent[] = [];
+
   flare.diagnostics.events.subscribe((event) => events.push(event));
   flare.start();
 
@@ -337,11 +373,14 @@ test("an event never carries an error object or report content, only its shape",
 test("a breadcrumb refused for belonging to a previous identity is announced", () => {
   let clock = 1_000;
   const mock = createMockAdapter();
+
   const flare = new Flare({
     destinations: { primary: mock.adapter },
     now: () => clock,
   });
+
   const events: FlareDiagnosticEvent[] = [];
+
   flare.diagnostics.events.subscribe((event) => events.push(event));
   flare.user({ id: "ada" });
   clock = 2_000;

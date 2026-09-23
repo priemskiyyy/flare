@@ -52,6 +52,7 @@ test("a held submission waits for the test to answer it", async () => {
   const session = await mock.adapter.open(openContext);
 
   const pending = session.submit(report, context);
+
   mock.submissions[0]?.settle({ status: "indeterminate", reason: "ambiguous" });
 
   await expect(pending).resolves.toEqual({
@@ -66,6 +67,7 @@ test("a held submission can be failed like a rejecting provider", async () => {
   const failure = new Error("network down");
 
   const pending = session.submit(report, context);
+
   mock.submissions[0]?.fail(failure);
 
   await expect(pending).rejects.toBe(failure);
@@ -73,11 +75,13 @@ test("a held submission can be failed like a rejecting provider", async () => {
 
 test("a submit hook can throw like a synchronous provider failure, or answer", async () => {
   const failure = new Error("sdk threw");
+
   const throwing = createMockAdapter({
     onSubmit: () => {
       throw failure;
     },
   });
+
   const answering = createMockAdapter({
     onSubmit: () => ({ status: "dropped", reason: "provider-filtered" }),
   });
@@ -99,6 +103,7 @@ test("a held open waits for the test, and can fail like a provider that will not
 
   const opened = starting.adapter.open(openContext);
   const rejected = failing.adapter.open(openContext);
+
   starting.openings[0]?.settle();
   failing.openings[0]?.fail(failure);
 
@@ -108,6 +113,7 @@ test("a held open waits for the test, and can fail like a provider that will not
 
 test("an open hook can throw like a synchronous startup failure", () => {
   const failure = new Error("native module missing");
+
   const mock = createMockAdapter({
     onOpen: () => {
       throw failure;

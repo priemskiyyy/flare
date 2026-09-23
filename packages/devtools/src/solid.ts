@@ -24,12 +24,15 @@ export const FlareDevtools = (props: FlareDevtoolsProps) => {
   }
 
   const flare = useFlare();
+
   const devtools = new Devtools({
     flare: flare(),
     initialIsOpen: props.initialIsOpen ?? false,
     maxEvents: props.maxEvents ?? 200,
   });
+
   const host = document.createElement("div");
+
   host.dataset.flareDevtools = "";
 
   createEffect(() => devtools.setFlare(flare()));

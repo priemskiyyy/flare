@@ -13,16 +13,22 @@ type Events = {
 
 const create = (clock = { now: 1_000 }) => {
   const mock = createMockAdapter();
+
   const flare = new Flare({
     destinations: { primary: mock.adapter },
     now: () => clock.now,
   });
+
   flare.start();
+
   const trace = fakeTraceSource<Events>();
+
   const breadcrumbs = () => {
     flare.capture(new Error("read the breadcrumbs"));
+
     return mock.submissions.at(-1)?.report.breadcrumbs ?? [];
   };
+
   return { mock, flare, trace, clock, breadcrumbs };
 };
 
@@ -55,6 +61,7 @@ test("bridging subscribes once, and stopping unsubscribes for good", () => {
 test("a source that keeps calling after it was told to stop is ignored", () => {
   const { flare, breadcrumbs } = create();
   const stubborn = fakeTraceSource<Events>({ ignoresUnsubscribe: true });
+
   const stop = traceBreadcrumbs({
     source: stubborn.source,
     flare,
@@ -77,6 +84,7 @@ test("a source that keeps calling after it was told to stop is ignored", () => {
 
 test("a mapped event becomes a breadcrumb with only the properties its mapper chose", () => {
   const { flare, trace, breadcrumbs } = create();
+
   traceBreadcrumbs({
     source: trace.source,
     flare,
@@ -103,6 +111,7 @@ test("a mapped event becomes a breadcrumb with only the properties its mapper ch
 
 test("an event without a mapper is ignored: there is no pass-through", () => {
   const { flare, trace, breadcrumbs } = create();
+
   traceBreadcrumbs({
     source: trace.source,
     flare,
@@ -123,6 +132,7 @@ test("an event without a mapper is ignored: there is no pass-through", () => {
 
 test("a mapper can decline an event, and a breadcrumb needs no data", () => {
   const { flare, trace, breadcrumbs } = create();
+
   traceBreadcrumbs({
     source: trace.source,
     flare,
@@ -151,6 +161,7 @@ test("a mapper can decline an event, and a breadcrumb needs no data", () => {
 
 test("the breadcrumb keeps the time the event occurred, not the time it was delivered", () => {
   const { flare, trace, clock, breadcrumbs } = create();
+
   traceBreadcrumbs({
     source: trace.source,
     flare,
@@ -170,6 +181,7 @@ test("the breadcrumb keeps the time the event occurred, not the time it was deli
 
 test("a source that hands a new subscriber its history adds nothing: what occurred before bridging is ignored", () => {
   const { flare, breadcrumbs } = create();
+
   const replaying = fakeTraceSource<Events>({
     history: [
       {
@@ -204,6 +216,7 @@ test("a source that hands a new subscriber its history adds nothing: what occurr
 
 test("an event that occurred under the previous account never becomes the next account's breadcrumb", () => {
   const { flare, trace, clock, breadcrumbs } = create();
+
   traceBreadcrumbs({
     source: trace.source,
     flare,
@@ -238,6 +251,7 @@ test("an event that occurred under the previous account never becomes the next a
 test("a mapper that throws is contained: the source keeps dispatching and later events still arrive", () => {
   const { flare, trace, breadcrumbs } = create();
   const other = vi.fn();
+
   trace.source.subscribe(other);
   traceBreadcrumbs({
     source: trace.source,
@@ -248,6 +262,7 @@ test("a mapper that throws is contained: the source keeps dispatching and later 
         if (path === "/broken") {
           throw new Error("mapper exploded");
         }
+
         return { name: "pageViewed", data: { path } };
       },
     },
@@ -272,6 +287,7 @@ test("a mapper that throws is contained: the source keeps dispatching and later 
 
 test("what a mapper returns still passes through Flare's redaction", () => {
   const { flare, trace, breadcrumbs } = create();
+
   traceBreadcrumbs({
     source: trace.source,
     flare,
@@ -298,6 +314,7 @@ test("what a mapper returns still passes through Flare's redaction", () => {
 
 test("a malformed event from a loosely typed source is ignored", () => {
   const { flare, trace, breadcrumbs } = create();
+
   traceBreadcrumbs({
     source: trace.source,
     flare,
@@ -316,6 +333,7 @@ test.each([Number.NaN, Number.POSITIVE_INFINITY])(
   "an unusable event time %s cannot become a breadcrumb for the current account",
   (timestamp) => {
     const { flare, trace, breadcrumbs } = create();
+
     traceBreadcrumbs({
       source: trace.source,
       flare,
@@ -335,13 +353,16 @@ test.each([Number.NaN, Number.POSITIVE_INFINITY])(
 
 test("unreadable source events cannot interrupt the source's dispatch", () => {
   const { flare, trace, breadcrumbs } = create();
+
   traceBreadcrumbs({
     source: trace.source,
     flare,
     now: () => 1_000,
     map: { "page.viewed": () => ({ name: "pageViewed" }) },
   });
+
   const later = vi.fn();
+
   trace.source.subscribe(later);
 
   expect(() =>

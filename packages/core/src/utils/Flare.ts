@@ -128,7 +128,9 @@ export class Flare<
       limits: { ...DEFAULT_LIMITS, ...options.privacy?.limits },
     };
     this.#schema = options.schema ?? {};
+
     const destinations = this.#readDestinations(options.destinations);
+
     this.#route = options.route;
     this.#session = new SessionState({
       maxBreadcrumbs: this.#policy.limits.breadcrumbs,
@@ -174,9 +176,11 @@ export class Flare<
     }
 
     const selected = options.default;
+
     if (selected !== undefined && this.#route !== undefined) {
       throw new Error("Flare accepts either default or route, not both.");
     }
+
     this.#defaultDestinations =
       selected === undefined
         ? this.#runtimes
@@ -219,9 +223,11 @@ export class Flare<
         context: null,
       });
     }
+
     for (const runtime of this.#runtimes.values()) {
       runtime.start();
     }
+
     this.#diagnostics.changed();
   };
 
@@ -239,14 +245,19 @@ export class Flare<
   user = (user: FlareUser | null) => {
     this.#guardSession("user", (generation) => {
       const prepared = prepareUser(user, this.#policy);
+
       this.#recordLosses(prepared.losses);
+
       if (!this.#isCurrentSession(generation)) {
         return;
       }
+
       const changed = this.#session.identify(prepared);
+
       if (!changed) {
         return;
       }
+
       this.#identityBeganAt = this.#now();
       this.#diagnostics.record({
         source: "session",
@@ -273,21 +284,28 @@ export class Flare<
     this.#guardSession(`tags.${key}`, (generation) => {
       if (value === null) {
         this.#session.removeTag(key);
+
         return;
       }
+
       const prepared = prepareTags(
         { [key]: value },
         this.#schema.tags,
         this.#policy,
       );
+
       this.#recordLosses(prepared.losses);
+
       if (!this.#isCurrentSession(generation)) {
         return;
       }
+
       const tag = prepared.value[key];
+
       if (tag === undefined) {
         return;
       }
+
       this.#session.setTag(key, tag);
     });
   };
@@ -308,21 +326,28 @@ export class Flare<
     this.#guardSession(`contexts.${name}`, (generation) => {
       if (value === null) {
         this.#session.removeContext(name);
+
         return;
       }
+
       const prepared = prepareContexts(
         { [name]: value },
         this.#schema.contexts,
         this.#policy,
       );
+
       this.#recordLosses(prepared.losses);
+
       if (!this.#isCurrentSession(generation)) {
         return;
       }
+
       const context = prepared.value[name];
+
       if (context === undefined) {
         return;
       }
+
       this.#session.setContext(name, context);
     });
   };
@@ -344,6 +369,7 @@ export class Flare<
     this.#guardSession(`breadcrumbs.${name}`, (generation) => {
       const occurredAt = this.#readOccurrence(options.timestamp);
       const timestamp = occurredAt ?? this.#now();
+
       // A backward clock must not reject a breadcrumb recorded under the current identity.
       if (occurredAt !== null && occurredAt < this.#identityBeganAt) {
         this.#diagnostics.record({
@@ -353,6 +379,7 @@ export class Flare<
           report: null,
           context: { name },
         });
+
         return;
       }
 
@@ -361,19 +388,26 @@ export class Flare<
         this.#schema.breadcrumbs,
         this.#policy,
       );
+
       this.#recordLosses(prepared.losses);
+
       if (!this.#isCurrentSession(generation)) {
         return;
       }
+
       const breadcrumb = prepared.value;
+
       if (breadcrumb === null) {
         return;
       }
+
       this.#session.addBreadcrumb(breadcrumb);
+
       for (const runtime of this.#runtimes.values()) {
         if (!this.#isCurrentSession(generation)) {
           return;
         }
+
         runtime.ambientBreadcrumb(breadcrumb);
       }
     });
@@ -397,6 +431,7 @@ export class Flare<
   }["bivariant"] = (options) => {
     const generation = this.#session.state.get().generation;
     const bound = this.#bindScope(generation, options);
+
     return {
       capture: (thrown, captureOptions = {}) =>
         this.#report({ kind: "exception", thrown }, captureOptions, bound),
@@ -461,9 +496,11 @@ export class Flare<
     const destinations: FlareFlushResult<
       DestinationName<TDestinations>
     >["destinations"] = Object.create(null);
+
     for (const result of results) {
       destinations[result.name] = result.boundary;
     }
+
     this.#diagnostics.record({
       source: "runtime",
       type: "flushed",
@@ -471,6 +508,7 @@ export class Flare<
       report: null,
       context: { timeoutMs },
     });
+
     return { drained: results.every((result) => result.drained), destinations };
   };
 
@@ -487,6 +525,7 @@ export class Flare<
     name: TName,
   ): DestinationHandle<NativeOf<TDestinations>[TName]> => {
     const runtime = this.#runtimes.get(name);
+
     if (runtime === undefined) {
       throw new Error(`Flare has no destination named "${name}".`);
     }
@@ -510,9 +549,11 @@ export class Flare<
     }
 
     this.#status.set(Object.freeze({ state: "disposed" }));
+
     for (const runtime of this.#runtimes.values()) {
       runtime.dispose();
     }
+
     this.#diagnostics.dispose();
   };
 
@@ -520,9 +561,11 @@ export class Flare<
     if (typeof timestamp !== "number") {
       return null;
     }
+
     if (!Number.isFinite(timestamp) || timestamp < 0) {
       return null;
     }
+
     return timestamp;
   }
 
@@ -530,24 +573,31 @@ export class Flare<
     const adapters = new Map<DestinationName<TDestinations>, ReporterAdapter>();
     const owners = new Map<unknown, string>();
     const singletons = new Map<object, string>();
+
     for (const name in destinations) {
       if (!Object.hasOwn(destinations, name)) {
         continue;
       }
+
       const adapter = destinations[name];
+
       if (adapter === undefined) {
         continue;
       }
+
       const owner = owners.get(adapter);
+
       if (owner !== undefined) {
         throw new Error(
           `Flare destinations "${owner}" and "${name}" share one adapter. Create one adapter per destination.`,
         );
       }
+
       owners.set(adapter, name);
       this.#claimSingleton(singletons, adapter.singleton, name);
       adapters.set(name, adapter);
     }
+
     return adapters;
   }
 
@@ -562,11 +612,13 @@ export class Flare<
     }
 
     const owner = singletons.get(singleton);
+
     if (owner !== undefined) {
       throw new Error(
         `Flare destinations "${owner}" and "${name}" drive the same singleton SDK. Register it once.`,
       );
     }
+
     singletons.set(singleton, name);
   }
 
@@ -575,18 +627,23 @@ export class Flare<
       DestinationName<TDestinations>,
       DestinationRuntime
     >();
+
     for (const name of names) {
       const runtime = this.#runtimes.get(name);
+
       if (runtime === undefined) {
         throw new Error(`Flare has no destination named "${String(name)}".`);
       }
+
       destinations.set(name, runtime);
     }
+
     return destinations;
   }
 
   #readSnapshot = (): FlareSnapshot => {
     const session = this.#session.state.get();
+
     return Object.freeze({
       status: this.#status.get(),
       generation: session.generation,
@@ -610,8 +667,10 @@ export class Flare<
   // Breadcrumbs change the session too, but they reach providers one by one.
   #handleSessionChange = () => {
     this.#diagnostics.changed();
+
     const current = this.#session.state.get();
     const previous = this.#ambient;
+
     if (
       current.generation === previous.generation &&
       current.user === previous.user &&
@@ -622,12 +681,15 @@ export class Flare<
     }
 
     const next = toAmbient(current);
+
     this.#ambient = next;
+
     for (const runtime of this.#runtimes.values()) {
       // A provider callback may already have mirrored a newer snapshot to everyone.
       if (this.#ambient !== next) {
         return;
       }
+
       runtime.syncAmbient(next);
     }
   };
@@ -663,6 +725,7 @@ export class Flare<
     if (losses.length === 0) {
       return;
     }
+
     this.#diagnostics.record({
       source: "session",
       type: "session losses",
@@ -701,6 +764,7 @@ export class Flare<
     }
 
     const admission = this.#rate.admit(this.#now());
+
     if (admission !== "admitted") {
       if (admission === "refused-first") {
         this.#diagnostics.record({
@@ -711,6 +775,7 @@ export class Flare<
           context: null,
         });
       }
+
       return "rate-limited";
     }
 
@@ -721,6 +786,7 @@ export class Flare<
     if (scope.generation !== this.#session.state.get().generation) {
       return "stale-scope";
     }
+
     return null;
   }
 
@@ -732,10 +798,12 @@ export class Flare<
   ): SanitizedReport {
     const session = this.#session.state.get();
     const payload = prepareReportPayload(source, this.#policy);
+
     const prepared = prepareReportLayer(options, {
       schema: this.#schema,
       policy: this.#policy,
     });
+
     const report = composeReport({
       id,
       timestamp: this.#now(),
@@ -750,6 +818,7 @@ export class Flare<
         ...prepared.losses,
       ],
     });
+
     return fitReport(report, this.#policy.limits.totalSize);
   }
 
@@ -759,12 +828,15 @@ export class Flare<
   ) {
     try {
       let selected = options.to;
+
       if (selected === undefined) {
         if (typeof this.#route !== "function") {
           return this.#defaultDestinations;
         }
+
         selected = this.#route({ report });
       }
+
       if (!Array.isArray(selected)) {
         return null;
       }
@@ -782,8 +854,10 @@ export class Flare<
     scope: BoundScope | null,
   ): Receipt<DestinationName<TDestinations>> {
     const id = createReportId();
+
     const drop = (reason: ReportDropReason) => {
       const dropped = createReceipt<DestinationName<TDestinations>>(id, []);
+
       dropped.drop(reason);
       this.#diagnostics.record({
         source: "report",
@@ -792,19 +866,24 @@ export class Flare<
         report: id,
         context: { reason },
       });
+
       return dropped.receipt;
     };
 
     const refusal = this.#refusal(scope);
+
     if (refusal !== null) {
       return drop(refusal);
     }
 
     let report: SanitizedReport;
     let dedupeKey: string | null;
+
     try {
       report = this.#build(id, source, options, scope);
+
       const key = options.dedupe?.key;
+
       dedupeKey = typeof key === "string" ? key : null;
     } catch {
       // Privacy outranks delivery: what could not be sanitized is not sent.
@@ -812,15 +891,18 @@ export class Flare<
     }
 
     const destinations = this.#resolveRoute(report, options);
+
     if (destinations === null) {
       return drop("route-failed");
     }
+
     if (destinations.size === 0) {
       return drop("no-destinations");
     }
 
     const names = [...destinations.keys()];
     const { receipt, settle } = createReceipt(id, names);
+
     this.#pendingReceipts += 1;
     receipt.settled.then(() => {
       this.#pendingReceipts -= 1;
@@ -839,6 +921,7 @@ export class Flare<
     });
 
     const thrown = source.kind === "exception" ? source.thrown : undefined;
+
     for (const [name, runtime] of destinations) {
       const duplicate = this.#dedupe.isDuplicate({
         destination: name,
@@ -847,8 +930,10 @@ export class Flare<
         thrown,
         now: this.#now(),
       });
+
       if (duplicate) {
         const outcome = { status: "dropped", reason: "deduped" } as const;
+
         settle(name, outcome);
         this.#diagnostics.record({
           source: "destination",
@@ -859,6 +944,7 @@ export class Flare<
         });
         continue;
       }
+
       runtime.accept({
         report,
         settle: (outcome) => settle(name, outcome),
@@ -866,6 +952,7 @@ export class Flare<
     }
 
     this.#diagnostics.changed();
+
     return receipt;
   }
 }

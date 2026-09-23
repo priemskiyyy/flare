@@ -9,8 +9,10 @@ import Harness from "./BoundaryHarness.fixture.svelte";
 import Orphan from "./Orphan.fixture.svelte";
 
 const disposals: Array<() => void> = [];
+
 afterEach(() => {
   cleanup();
+
   for (const dispose of disposals.splice(0).reverse()) {
     dispose();
   }
@@ -19,8 +21,10 @@ afterEach(() => {
 const create = () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
   disposals.push(flare.dispose);
+
   return { mock, flare };
 };
 
@@ -28,6 +32,7 @@ test("an error thrown while rendering is reported once, and the fallback is show
   const { mock, flare } = create();
 
   const view = render(Harness, { flare, isBroken: () => true });
+
   await tick();
 
   expect(view.getByRole("button", { name: "try again" })).toBeTruthy();
@@ -54,6 +59,7 @@ test("capture options shape the report the boundary makes, contexts included", a
   await tick();
 
   const report = mock.submissions[0]?.report;
+
   expect(report?.tags).toEqual({ area: "cart" });
   expect(report?.level).toBe("fatal");
   expect(report?.operation).toBe("render-cart");
@@ -64,11 +70,13 @@ test("the fallback snippet receives the error and a reset that renders the child
   const { mock, flare } = create();
   const state = { isBroken: true };
   const seen: unknown[] = [];
+
   const view = render(Harness, {
     flare,
     isBroken: () => state.isBroken,
     onFallback: (error) => seen.push(error),
   });
+
   await tick();
 
   state.isBroken = false;
@@ -82,6 +90,7 @@ test("the fallback snippet receives the error and a reset that renders the child
 test("a second error after a reset is a new report", async () => {
   const { mock, flare } = create();
   const view = render(Harness, { flare, isBroken: () => true });
+
   await tick();
 
   await fireEvent.click(view.getByRole("button", { name: "try again" }));
@@ -112,6 +121,7 @@ test("a boundary with nothing to catch renders its children and reports nothing"
   const { mock, flare } = create();
 
   const view = render(Harness, { flare, isBroken: () => false });
+
   await tick();
 
   expect(view.container.textContent).toContain("the widget renders");

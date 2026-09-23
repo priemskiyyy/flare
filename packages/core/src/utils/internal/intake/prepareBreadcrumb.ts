@@ -15,6 +15,7 @@ export const prepareBreadcrumb = (
   const { name, timestamp } = breadcrumb;
   const path = `breadcrumbs.${name}`;
   const validation = validateDeclared(declared, name, breadcrumb.data);
+
   if (
     !validation.valid ||
     (validation.value !== undefined && !isRecord(validation.value))
@@ -23,6 +24,7 @@ export const prepareBreadcrumb = (
   }
 
   const sanitized = sanitizeValue(validation.value, path, policy);
+
   return {
     value: Object.freeze({
       name,

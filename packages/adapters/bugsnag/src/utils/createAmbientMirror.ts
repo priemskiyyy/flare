@@ -30,12 +30,15 @@ export const createAmbientMirror = (sdk: BugsnagLike, parts: Parts) => {
         tags.delete(key);
       }
     }
+
     if (Object.keys(next).length === 0) {
       return;
     }
+
     for (const key of Object.keys(next)) {
       tags.add(key);
     }
+
     sdk.addMetadata(TAGS_SECTION, { ...next });
   };
 
@@ -46,10 +49,12 @@ export const createAmbientMirror = (sdk: BugsnagLike, parts: Parts) => {
         contexts.delete(name);
       }
     }
+
     for (const [name, context] of Object.entries(next)) {
       if (RESERVED_SECTIONS.includes(name)) {
         continue;
       }
+
       contexts.add(name);
       // addMetadata merges into a section; a Flare context replaces by name.
       sdk.clearMetadata(name);
@@ -58,18 +63,23 @@ export const createAmbientMirror = (sdk: BugsnagLike, parts: Parts) => {
   };
 
   const enabled = Object.values(parts).includes(true);
+
   const context: AmbientReporterContext | undefined = !enabled
     ? undefined
     : {
         session: (snapshot) => {
           generation = snapshot.generation;
+
           if (parts.user === true) {
             const { user } = snapshot;
+
             sdk.setUser(user?.id, user?.email, user?.name);
           }
+
           if (parts.tags === true) {
             mirrorTags(snapshot.tags);
           }
+
           if (parts.contexts === true) {
             mirrorContexts(snapshot.contexts);
           }
@@ -101,6 +111,7 @@ export const createAmbientMirror = (sdk: BugsnagLike, parts: Parts) => {
       if (parts.user === true) {
         sdk.setUser(undefined, undefined, undefined);
       }
+
       mirrorTags({});
       mirrorContexts({});
     },

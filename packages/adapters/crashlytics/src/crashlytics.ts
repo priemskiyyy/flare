@@ -49,6 +49,7 @@ export const crashlytics = <TInstance>({
     open: (_context, lifetime) => {
       const instance = sdk.getCrashlytics();
       const mirror = createAmbientMirror(sdk, instance, ambient);
+
       lifetime.add(mirror.clear);
 
       return {
@@ -57,6 +58,7 @@ export const crashlytics = <TInstance>({
           if (report.kind === "message") {
             return { status: "skipped", reason: "unsupported-report-kind" };
           }
+
           if (report.kind !== "exception") {
             return assertUnreachable(report);
           }
@@ -65,11 +67,13 @@ export const crashlytics = <TInstance>({
           // wrote that id, a report that belongs to someone else would be
           // recorded under the wrong account, so it is not recorded at all.
           const reportUserId = report.identity.user?.id ?? null;
+
           if (ambient.user === true && reportUserId !== mirror.userId()) {
             return { status: "skipped", reason: "identity-mismatch" };
           }
 
           sdk.recordError(instance, rebuildError(report.exception));
+
           return {
             status: "submitted",
             evidence: "sdk-call-returned",

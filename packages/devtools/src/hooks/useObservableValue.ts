@@ -10,6 +10,7 @@ export const useObservableValue = <TValue>(
 
   createEffect(() => {
     const current = source();
+
     setValue(() => current.get());
     onCleanup(current.subscribe(() => setValue(() => current.get())));
   });

@@ -22,19 +22,24 @@ export const validateDeclared = (
     }
 
     const schema = declared[name];
+
     if (schema === undefined) {
       return { valid: false };
     }
 
     const result = schema["~standard"].validate(value);
+
     if (isPromiseLike(result)) {
       // Capture is synchronous. Observe a rejected promise without retaining it.
       Promise.resolve(result).catch(() => {});
+
       return { valid: false };
     }
+
     if (result.issues !== undefined) {
       return { valid: false };
     }
+
     return { valid: true, value: result.value };
   } catch {
     return { valid: false };

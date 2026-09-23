@@ -23,6 +23,7 @@ test("the testing subpath exposes the conformance suite", () => {
 
 test("importing and constructing on a server is inert: no timer, no listener, nothing opened", async () => {
   vi.useFakeTimers();
+
   const addListener = vi.spyOn(process, "on");
   const { adapter, openings } = mock.createMockAdapter();
 

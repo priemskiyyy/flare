@@ -30,44 +30,54 @@ export class DedupeIndex {
 
   isDuplicate = ({ destination, generation, key, thrown, now }: Occurrence) => {
     const { keys, objects } = this.#history(destination, generation);
+
     if (key !== null) {
       if (keys.has(key)) {
         return true;
       }
 
       keys.add(key);
+
       if (keys.size > this.#maxKeys) {
         for (const oldest of keys) {
           keys.delete(oldest);
           break;
         }
       }
+
       return false;
     }
 
     if (typeof thrown !== "object" || thrown === null) {
       return false;
     }
+
     if (this.#windowMs <= 0) {
       return false;
     }
 
     const previous = objects.get(thrown);
+
     objects.set(thrown, now);
+
     return previous !== undefined && now - previous < this.#windowMs;
   };
 
   #history(destination: string, generation: number): DestinationHistory {
     const existing = this.#destinations.get(destination);
+
     if (existing !== undefined && existing.generation === generation) {
       return existing;
     }
+
     const history: DestinationHistory = {
       generation,
       keys: new Set(),
       objects: new WeakMap(),
     };
+
     this.#destinations.set(destination, history);
+
     return history;
   }
 }

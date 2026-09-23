@@ -42,25 +42,34 @@ export const traceBreadcrumbs = <TEvents extends Record<string, unknown>>({
       if (typeof event !== "object" || event === null) {
         return;
       }
+
       const { name, timestamp } = event;
+
       if (typeof name !== "string" || typeof timestamp !== "number") {
         return;
       }
+
       // An unknown occurrence time cannot safely be attributed to an account.
       if (!Number.isFinite(timestamp) || timestamp < bridgedSince) {
         return;
       }
+
       if (!Object.hasOwn(map, name)) {
         return;
       }
+
       const mapper = map[name];
+
       if (typeof mapper !== "function") {
         return;
       }
+
       const breadcrumb = mapper(event.properties);
+
       if (breadcrumb === null) {
         return;
       }
+
       flare.breadcrumb(breadcrumb.name, breadcrumb.data, { timestamp });
     } catch {
       // Bad event data or a failing mapper costs only this breadcrumb.
@@ -74,6 +83,7 @@ export const traceBreadcrumbs = <TEvents extends Record<string, unknown>>({
     if (stopped) {
       return;
     }
+
     stopped = true;
     unsubscribe();
   };

@@ -29,6 +29,7 @@ const typed = new Flare({
   destinations: { sentry: createMockAdapter().adapter },
   schema: { tags: { area: schemaOf<"upload" | "editor">() } },
 });
+
 const untyped = new Flare({
   destinations: { sentry: createMockAdapter().adapter },
 });
@@ -54,6 +55,7 @@ export const useTypeContracts = () => {
   useDestinationStatus(() => "anything");
 
   const status = useFlareStatus();
+
   // @ts-expect-error -- a status is read, never written.
   status.current = { state: "started" };
 

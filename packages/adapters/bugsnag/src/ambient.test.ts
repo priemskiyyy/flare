@@ -8,12 +8,15 @@ const create = (
   ambient: NonNullable<Parameters<typeof bugsnag>[0]["ambient"]>,
 ) => {
   const fake = fakeBugsnag();
+
   const flare = new Flare({
     destinations: {
       bugsnag: bugsnag({ sdk: fake.sdk, Breadcrumb: fake.Breadcrumb, ambient }),
     },
   });
+
   flare.start();
+
   return { fake, flare };
 };
 
@@ -21,9 +24,11 @@ const signedOut = { id: undefined, email: undefined, name: undefined };
 
 test("without the ambient option nothing is ever mirrored into the Bugsnag client", () => {
   const fake = fakeBugsnag();
+
   const flare = new Flare({
     destinations: { bugsnag: bugsnag({ sdk: fake.sdk }) },
   });
+
   flare.start();
 
   flare.user({ id: "ada" });
@@ -79,6 +84,7 @@ test("the user is not mirrored when only other parts were asked for", () => {
 
 test("a context is replaced in Bugsnag as a whole, not merged into its previous keys", () => {
   const { fake, flare } = create({ contexts: true });
+
   flare.context("upload", { kind: "avatar", attempt: 1 });
 
   flare.context("upload", { attempt: 2 });
@@ -88,6 +94,7 @@ test("a context is replaced in Bugsnag as a whole, not merged into its previous 
 
 test("ambient contexts cannot replace Flare's reserved metadata sections", () => {
   const { fake, flare } = create({ tags: true, contexts: true });
+
   flare.tag("plan", "pro");
 
   flare.context("tags", { plan: "wrong" });
@@ -105,6 +112,7 @@ test("ambient contexts cannot replace Flare's reserved metadata sections", () =>
 
 test("signing out and removing a tag or a context are mirrored too", () => {
   const { fake, flare } = create({ user: true, tags: true, contexts: true });
+
   flare.user({ id: "ada" });
   flare.tag("plan", "pro");
   flare.tag("area", "upload");
@@ -129,6 +137,7 @@ test("signing out and removing a tag or a context are mirrored too", () => {
 
 test("a report delivered after an account switch carries nothing the mirror wrote for the new account", () => {
   const fake = fakeBugsnag();
+
   const flare = new Flare({
     destinations: {
       bugsnag: bugsnag({
@@ -137,6 +146,7 @@ test("a report delivered after an account switch carries nothing the mirror wrot
       }),
     },
   });
+
   flare.user({ id: "ada" });
   flare.capture(new Error("captured as ada, before start"));
 
@@ -158,6 +168,7 @@ test("a report delivered after an account switch carries nothing the mirror wrot
 
 test("mirrored breadcrumbs are stamped with their identity generation", () => {
   const { fake, flare } = create({ breadcrumbs: true });
+
   flare.user({ id: "ada" });
 
   flare.breadcrumb("ada-opened-billing", { plan: "pro" });
@@ -174,12 +185,15 @@ test("mirrored breadcrumbs are stamped with their identity generation", () => {
 
 test("delayed SDK hooks clear the mirror that was copied onto the event at submission", async () => {
   const fake = fakeBugsnag();
+
   const flare = new Flare({
     destinations: {
       bugsnag: bugsnag({ sdk: fake.sdk, ambient: { contexts: true } }),
     },
   });
+
   const receipt = flare.capture(new Error("anonymous buffered report"));
+
   flare.user({ id: "first" });
   flare.context("firstAccount", { cart: "private cart" });
   fake.state.holdBeforeOnError = true;
@@ -197,6 +211,7 @@ test("delayed SDK hooks clear the mirror that was copied onto the event at submi
 
 test("Bugsnag cannot clear breadcrumbs, so a report drops the previous account's mirrored ones itself", () => {
   const { fake, flare } = create({ breadcrumbs: true });
+
   flare.user({ id: "ada" });
   flare.breadcrumb("ada-opened-billing");
   flare.user({ id: "grace" });
@@ -214,10 +229,13 @@ test("Bugsnag cannot clear breadcrumbs, so a report drops the previous account's
 
 test("Bugsnag's own breadcrumbs carry no generation and are always kept", () => {
   const { fake, flare } = create({ breadcrumbs: true });
+
   flare.user({ id: "ada" });
   flare.breadcrumb("ada-step");
   flare.user({ id: "grace" });
+
   const automatic = new fake.Breadcrumb();
+
   automatic.message = "bugsnag-navigation";
   fake.client.breadcrumbs.push(automatic);
   flare.breadcrumb("grace-step");
@@ -231,6 +249,7 @@ test("Bugsnag's own breadcrumbs carry no generation and are always kept", () => 
 
 test("mirrored breadcrumbs are not added a second time to the events Flare submits", () => {
   const { fake, flare } = create({ breadcrumbs: true });
+
   flare.breadcrumb("opened");
 
   flare.capture(new Error("boom"));
@@ -240,6 +259,7 @@ test("mirrored breadcrumbs are not added a second time to the events Flare submi
 
 test("buffered reports carry the breadcrumbs captured before the mirror started", () => {
   const fake = fakeBugsnag();
+
   const flare = new Flare({
     destinations: {
       bugsnag: bugsnag({
@@ -249,6 +269,7 @@ test("buffered reports carry the breadcrumbs captured before the mirror started"
       }),
     },
   });
+
   flare.breadcrumb("before-start");
   flare.capture(new Error("buffered"));
   flare.breadcrumb("after-capture");
@@ -262,6 +283,7 @@ test("buffered reports carry the breadcrumbs captured before the mirror started"
 
 test("disposing a borrowed SDK removes what Flare mirrored and nothing else", () => {
   const { fake, flare } = create({ user: true, tags: true, contexts: true });
+
   fake.sdk.addMetadata("app", { build: 7 });
   fake.sdk.addMetadata("tags", { release: "set by the application" });
   flare.user({ id: "ada" });

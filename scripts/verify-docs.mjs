@@ -46,14 +46,17 @@ const config = readFileSync(
   path.join(root, "docs/.vitepress/config.ts"),
   "utf8",
 );
+
 const linked = new Set(
   Array.from(config.matchAll(/link: "\/([^"]*)"/g), ([, route]) =>
     route === "" ? "index.md" : `${route}.md`,
   ),
 );
+
 const pages = docsPages.map((file) =>
   path.relative(path.join(root, "docs"), file),
 );
+
 assert.deepEqual(
   pages.filter((page) => !linked.has(page)),
   [],
@@ -69,16 +72,20 @@ assert.deepEqual(
 // link per run turns fixing a set of them into a set of round trips.
 const broken = [];
 let checked = 0;
+
 for (const file of sources) {
   const markdown = readFileSync(file, "utf8");
+
   if (relative(file).startsWith("docs/")) {
     const frontmatter = markdown.match(/^---\n([\s\S]*?)\n---\n/)?.[1] ?? "";
+
     assert.match(
       frontmatter,
       /^description: "[^"\n]+"$/m,
       `${relative(file)}: missing frontmatter description`,
     );
   }
+
   assert.doesNotMatch(
     markdown,
     /^\s*(?:<!--\s*)?(?:generated (?:by|with)|co-authored-by:)/im,
@@ -89,25 +96,32 @@ for (const file of sources) {
     /\u2014/,
     `${relative(file)}: the project writes without em dashes`,
   );
+
   // Inline links only. Code fences are left alone because a link inside one is
   // sample text rather than navigation.
   const prose = markdown.replace(/```[\s\S]*?```/g, "");
+
   for (const [, target] of prose.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
     if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#")) {
       continue;
     }
 
     checked += 1;
+
     const [pathname] = target.split("#");
+
     if (pathname === "") {
       continue;
     }
+
     if (existsSync(path.resolve(path.dirname(file), pathname))) {
       continue;
     }
+
     broken.push(`${relative(file)} -> ${target}`);
   }
 }
+
 assert.deepEqual(
   broken,
   [],
@@ -119,13 +133,16 @@ console.log(
 
 const output = path.join(root, "docs/.vitepress/dist");
 const siteUrl = process.env.DOCS_SITE_URL;
+
 const base =
   process.env.DOCS_BASE_PATH ?? (siteUrl ? new URL(siteUrl).pathname : "/");
+
 const files = existsSync(output)
   ? readdirSync(output, { recursive: true }).filter(
       (file) => file.endsWith(".html") && file !== "404.html",
     )
   : [];
+
 assert.ok(files.length > 0, "Build the documentation before verifying it");
 assert.equal(
   files.length,
@@ -134,8 +151,10 @@ assert.equal(
 );
 
 const pageIds = new Map();
+
 for (const file of files) {
   const dom = new JSDOM(readFileSync(path.join(output, file), "utf8"));
+
   pageIds.set(
     file,
     new Set(
@@ -151,8 +170,10 @@ for (const file of files) {
 for (const file of files) {
   const dom = new JSDOM(readFileSync(path.join(output, file), "utf8"));
   const document = dom.window.document;
+
   const meta = (selector) =>
     document.querySelector(selector)?.getAttribute("content");
+
   assert.ok(document.title.includes("Flare"), `${file}: missing page title`);
   assert.equal(
     document.querySelectorAll("h1").length,
@@ -164,8 +185,10 @@ for (const file of files) {
     1,
     `${file}: expected one main landmark`,
   );
+
   const origin = new URL(siteUrl ?? "https://docs.local").origin;
   const currentUrl = new URL(`${base}${file}`, origin);
+
   for (const link of document.querySelectorAll("a[href]")) {
     const href = link.getAttribute("href");
     const target = new URL(href, currentUrl);
@@ -173,6 +196,7 @@ for (const file of files) {
     if (target.origin !== origin) {
       continue;
     }
+
     if (/^https?:\/\//i.test(href) && !target.pathname.startsWith(base)) {
       continue;
     }
@@ -181,13 +205,16 @@ for (const file of files) {
       target.pathname.startsWith(base),
       `${file}: link escapes the configured base: ${target.pathname}`,
     );
+
     const route = decodeURIComponent(target.pathname.slice(base.length));
+
     const targetFile =
       route.endsWith("/") || route === ""
         ? `${route}index.html`
         : path.extname(route)
           ? route
           : `${route}.html`;
+
     assert.ok(
       existsSync(path.join(output, targetFile)),
       `${file}: missing link target ${targetFile}`,
@@ -200,18 +227,22 @@ for (const file of files) {
       );
     }
   }
+
   assert.ok(meta('meta[name="description"]'), `${file}: missing description`);
+
   for (const property of ["og:title", "og:description"]) {
     assert.ok(
       meta(`meta[property="${property}"]`),
       `${file}: missing ${property}`,
     );
   }
+
   for (const image of document.querySelectorAll("img")) {
     assert.ok(image.hasAttribute("alt"), `${file}: image is missing alt text`);
   }
 
   const icon = document.querySelector('link[rel="icon"]')?.getAttribute("href");
+
   assert.ok(
     icon?.startsWith(base),
     `${file}: missing icon under the configured base`,
@@ -227,6 +258,7 @@ for (const file of files) {
       file.replace(/(^|\/)index\.html$/, "$1").replace(/\.html$/, ""),
       `${siteUrl.replace(/\/$/, "")}/`,
     ).href;
+
     assert.equal(
       document.querySelector('link[rel="canonical"]')?.getAttribute("href"),
       expected,
@@ -238,13 +270,16 @@ for (const file of files) {
       `${file}: incorrect Open Graph URL`,
     );
   }
+
   dom.window.close();
 }
 
 if (siteUrl) {
   const robots = readFileSync(path.join(output, "robots.txt"), "utf8");
+
   const sitemapUrl = new URL("sitemap.xml", `${siteUrl.replace(/\/$/, "")}/`)
     .href;
+
   assert.ok(
     robots.includes(`Sitemap: ${sitemapUrl}`),
     "robots.txt must link to the deployed sitemap",
@@ -254,6 +289,7 @@ if (siteUrl) {
     "Missing sitemap.xml",
   );
 }
+
 console.log(
   `Verified titles, headings, links, anchors and metadata for ${files.length} documentation pages.`,
 );

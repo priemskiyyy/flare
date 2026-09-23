@@ -22,6 +22,7 @@ export const useResize = ({
 
     return Math.min(Math.max(value, MIN_SIZE), available - EDGE_MARGIN);
   };
+
   // Dragging the handle away from its edge grows the panel on either axis.
   const dragDistance = (start: PointerEvent, move: PointerEvent) =>
     position() === "bottom"
@@ -33,9 +34,11 @@ export const useResize = ({
   ) => {
     const handle = event.currentTarget;
     const startSize = size();
+
     const handlePointerMove = (move: PointerEvent) => {
       onSizeChange(clamp(startSize + dragDistance(event, move)));
     };
+
     const handlePointerUp = () => {
       handle.removeEventListener("pointermove", handlePointerMove);
       handle.removeEventListener("pointerup", handlePointerUp);
@@ -53,6 +56,7 @@ export const useResize = ({
     if (event.key === grow) {
       event.preventDefault();
       onSizeChange(clamp(size() + KEYBOARD_STEP));
+
       return;
     }
 

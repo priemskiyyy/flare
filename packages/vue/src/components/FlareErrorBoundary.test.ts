@@ -9,6 +9,7 @@ import { FlareErrorBoundary, FlareProvider } from "src/index";
 import type { FlareErrorBoundaryProps } from "src/index";
 
 const cleanups: Array<() => void> = [];
+
 afterEach(() => {
   for (const cleanup of cleanups.splice(0).reverse()) {
     cleanup();
@@ -18,16 +19,20 @@ afterEach(() => {
 const create = () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
   cleanups.push(flare.dispose);
+
   return { mock, flare };
 };
 
 const isBroken = shallowRef(true);
+
 const Widget = defineComponent(() => () => {
   if (isBroken.value) {
     throw new Error("the widget could not render");
   }
+
   return h("p", "the widget renders");
 });
 
@@ -43,6 +48,7 @@ const render = (
   appErrorHandler: (error: unknown) => void = () => {},
 ) => {
   isBroken.value = true;
+
   const view = mount(
     defineComponent(
       () => () =>
@@ -61,7 +67,9 @@ const render = (
     ),
     { global: { config: { errorHandler: appErrorHandler } } },
   );
+
   cleanups.push(() => view.unmount());
+
   return view;
 };
 
@@ -69,6 +77,7 @@ test("an error thrown while rendering is reported once, and the fallback is show
   const { mock, flare } = create();
 
   const view = render(flare);
+
   await nextTick();
 
   expect(view.text()).toBe("something went wrong");
@@ -104,6 +113,7 @@ test("capture options shape the report the boundary makes", async () => {
   await nextTick();
 
   const report = mock.submissions[0]?.report;
+
   expect(report?.tags).toEqual({ area: "cart" });
   expect(report?.level).toBe("fatal");
   expect(report?.operation).toBe("render-cart");
@@ -112,16 +122,19 @@ test("capture options shape the report the boundary makes", async () => {
 test("the fallback slot receives the error and a reset that renders the children again", async () => {
   const { mock, flare } = create();
   const seen: unknown[] = [];
+
   const view = render(
     flare,
     {},
     {
       fallback: ({ error, reset }) => {
         seen.push(error);
+
         return h("button", { onClick: reset }, "try again");
       },
     },
   );
+
   await nextTick();
   expect(seen[0]).toBeInstanceOf(Error);
 
@@ -179,6 +192,7 @@ test("an error thrown by the fallback itself goes to the parent and is not repor
 
 test("an error in an event handler below the boundary is captured too, which is Vue's rule", async () => {
   const { mock, flare } = create();
+
   const Button = defineComponent(
     () => () =>
       h(
@@ -191,7 +205,9 @@ test("an error in an event handler below the boundary is captured too, which is 
         "press",
       ),
   );
+
   const view = render(flare, {}, { default: () => h(Button) });
+
   await nextTick();
   expect(mock.submissions).toEqual([]);
 
@@ -207,6 +223,7 @@ test("an error in an event handler below the boundary is captured too, which is 
 test("a boundary with nothing to catch renders its children and reports nothing", async () => {
   const { mock, flare } = create();
   const view = render(flare, {}, { default: () => h("p", "all good") });
+
   await nextTick();
 
   expect(view.text()).toBe("all good");

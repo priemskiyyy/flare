@@ -30,6 +30,7 @@ type DevtoolsPanelProps = {
 export const DevtoolsPanel = (props: DevtoolsPanelProps) => {
   const focusOnMount = useAutoFocus(props.autoFocus);
   const filters = useEventFilters(() => props.events);
+
   // The selection names a destination; the snapshot says whether it still exists.
   const selectedDestination = createMemo(() => {
     const selected = filters.filters().destination;

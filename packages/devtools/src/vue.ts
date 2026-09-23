@@ -28,6 +28,7 @@ export const FlareDevtools = defineComponent(
   (props: FlareDevtoolsProps) => {
     const flare = useFlare();
     const host = shallowRef<HTMLDivElement | null>(null);
+
     const devtools = new Devtools({
       flare: flare.value,
       initialIsOpen: props.initialIsOpen ?? false,

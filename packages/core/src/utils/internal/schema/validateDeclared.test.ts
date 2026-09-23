@@ -16,6 +16,7 @@ const area = schemaOf<"upload" | "editor">((value) => {
   if (value === "upload" || value === "editor") {
     return { value };
   }
+
   return { issues: [{ message: "expected upload or editor" }] };
 });
 
@@ -55,7 +56,9 @@ test("an asynchronous validator is rejected, because capture is synchronous", ()
 
 test("an asynchronous validator that rejects leaves no unhandled rejection", async () => {
   const unhandled = vi.fn();
+
   process.on("unhandledRejection", unhandled);
+
   const rejecting = schemaOf<string>(() =>
     Promise.reject(new Error("late failure")),
   );
@@ -83,6 +86,7 @@ test("a validator keeps its receiver", () => {
     vendor: "test",
     validate(value: unknown) {
       expect(this).toBe(standard);
+
       return { value };
     },
   };

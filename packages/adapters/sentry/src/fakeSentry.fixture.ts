@@ -39,21 +39,27 @@ export const fakeSentry = ({
 }: { initialized?: boolean } = {}) => {
   const global = emptyScope();
   const stack: ScopeData[] = [global];
+
   const processors = new WeakMap<
     ScopeData,
     Array<(event: SentryEventLike) => SentryEventLike>
   >();
+
   const events: CapturedEvent[] = [];
+
   const calls: {
     init: number;
     close: number;
     flush: Array<number | undefined>;
   } = { init: 0, close: 0, flush: [] };
+
   const state = { initialized, flushAnswer: true };
 
   const current = () => stack[stack.length - 1] ?? global;
+
   const captureScope = (): ScopeData => {
     const scope = current();
+
     let event: SentryEventLike = {
       ...(scope.user === null ? {} : { user: scope.user }),
       ...(scope.level === null ? {} : { level: scope.level }),
@@ -64,9 +70,11 @@ export const fakeSentry = ({
         ? {}
         : { transaction: scope.transactionName }),
     };
+
     for (const processor of processors.get(scope) ?? []) {
       event = processor(event);
     }
+
     return {
       user: event.user ?? null,
       level: event.level ?? null,
@@ -76,11 +84,13 @@ export const fakeSentry = ({
       transactionName: event.transaction ?? null,
     };
   };
+
   const writer = (read: () => ScopeData) => ({
     addEventProcessor: (
       processor: (event: SentryEventLike) => SentryEventLike,
     ) => {
       const scope = read();
+
       processors.set(scope, [...(processors.get(scope) ?? []), processor]);
     },
     setUser: (user: ScopeData["user"]) => {
@@ -95,8 +105,10 @@ export const fakeSentry = ({
     setContext: (name: string, context: Record<string, unknown> | null) => {
       if (context === null) {
         delete read().contexts[name];
+
         return;
       }
+
       read().contexts[name] = context;
     },
     setTransactionName: (name?: string) => {
@@ -114,8 +126,10 @@ export const fakeSentry = ({
     ...writer(() => global),
     withScope: (callback: (scope: ReturnType<typeof writer>) => void) => {
       const forked = cloneScope(current());
+
       processors.set(forked, [...(processors.get(current()) ?? [])]);
       stack.push(forked);
+
       try {
         callback(writer(() => forked));
       } finally {
@@ -128,19 +142,23 @@ export const fakeSentry = ({
         exception,
         scope: captureScope(),
       });
+
       return `evt_${events.length}`;
     },
     captureMessage: (message: string) => {
       events.push({ kind: "message", message, scope: captureScope() });
+
       return `evt_${events.length}`;
     },
     flush: (timeout?: number) => {
       calls.flush.push(timeout);
+
       return Promise.resolve(state.flushAnswer);
     },
     close: () => {
       calls.close += 1;
       state.initialized = false;
+
       return Promise.resolve(true);
     },
     getClient: () => (state.initialized ? { name: "fake client" } : undefined),

@@ -47,6 +47,7 @@ export class FlareDevtools {
   }: FlareDevtoolsOptions) {
     const [currentFlare, setFlare] = createSignal(flare);
     const [currentMaxEvents, setMaxEvents] = createSignal(maxEvents);
+
     this.#flare = currentFlare;
     this.#setFlare = setFlare;
     this.#maxEvents = currentMaxEvents;
@@ -64,6 +65,7 @@ export class FlareDevtools {
     }
 
     const root = element.shadowRoot ?? element.attachShadow({ mode: "open" });
+
     this.#dispose = render(
       () =>
         createComponent(Devtools, {

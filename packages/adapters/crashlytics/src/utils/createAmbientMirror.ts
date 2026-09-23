@@ -17,11 +17,13 @@ const toKeyValue = (value: unknown) =>
 
 const toKeys = (snapshot: AmbientSnapshot, parts: Parts) => {
   const keys: Record<string, string> = Object.create(null);
+
   if (parts.tags === true) {
     for (const [key, value] of Object.entries(snapshot.tags)) {
       keys[key] = String(value);
     }
   }
+
   if (parts.contexts === true) {
     for (const [name, context] of Object.entries(snapshot.contexts)) {
       for (const [key, value] of Object.entries(context)) {
@@ -29,6 +31,7 @@ const toKeys = (snapshot: AmbientSnapshot, parts: Parts) => {
       }
     }
   }
+
   return keys;
 };
 
@@ -61,12 +64,14 @@ export const createAmbientMirror = <TInstance>(
     if (next === userId) {
       return;
     }
+
     userId = next;
     contain(() => sdk.setUserId(instance, next ?? ""));
   };
 
   const mirrorKeys = (next: Record<string, string>) => {
     const payload: Record<string, string> = Object.create(null);
+
     for (const key of holding) {
       if (!Object.hasOwn(next, key)) {
         payload[key] = "";
@@ -74,34 +79,41 @@ export const createAmbientMirror = <TInstance>(
     }
 
     const admitted = new Set<string>();
+
     for (const [key, value] of Object.entries(next)) {
       if (!written.has(key) && written.size >= MAX_KEYS) {
         continue;
       }
+
       written.add(key);
       admitted.add(key);
       payload[key] = cut(value);
     }
+
     holding = admitted;
 
     if (Object.keys(payload).length === 0) {
       return;
     }
+
     contain(() => sdk.setAttributes(instance, payload));
   };
 
   const mirrorsKeys = parts.tags === true || parts.contexts === true;
   const mirrorsSession = parts.user === true || mirrorsKeys;
+
   const session: AmbientReporterContext["session"] = (snapshot) => {
     if (parts.user === true) {
       mirrorUser(snapshot.user?.id ?? null);
     }
+
     if (mirrorsKeys) {
       mirrorKeys(toKeys(snapshot, parts));
     }
   };
 
   const enabled = mirrorsSession || parts.breadcrumbs === true;
+
   const context: AmbientReporterContext | undefined = !enabled
     ? undefined
     : {
@@ -112,6 +124,7 @@ export const createAmbientMirror = <TInstance>(
               breadcrumb: ({ name, data }) => {
                 const line =
                   data === null ? name : `${name} ${toKeyValue(data)}`;
+
                 sdk.log(instance, cut(line));
               },
             }),

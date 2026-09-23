@@ -49,10 +49,13 @@ const listMarkdown = (directory) =>
   readdirSync(path.join(workspace, directory), { withFileTypes: true }).flatMap(
     (entry) => {
       const relative = path.join(directory, entry.name);
+
       if (entry.isDirectory()) {
         const skipped = ["node_modules", "dist", ".vitepress", ".artifacts"];
+
         return skipped.includes(entry.name) ? [] : listMarkdown(relative);
       }
+
       return entry.name.endsWith(".md") ? [relative] : [];
     },
   );
@@ -68,18 +71,23 @@ const files = [
 
 const snippets = [];
 let fragments = 0;
+
 for (const file of files) {
   const lines = readFileSync(path.join(workspace, file), "utf8").split("\n");
   let open = null;
+
   for (const [index, line] of lines.entries()) {
     if (open === null) {
       const fence = line.match(/^```(tsx?)\b/);
+
       if (fence === null) {
         continue;
       }
+
       const before = lines
         .slice(0, index)
         .findLast((text) => text.trim() !== "");
+
       open = {
         file,
         line: index + 1,
@@ -89,15 +97,18 @@ for (const file of files) {
       };
       continue;
     }
+
     if (line.startsWith("```")) {
       if (open.fragment) {
         fragments += 1;
       } else {
         snippets.push(open);
       }
+
       open = null;
       continue;
     }
+
     open.body.push(line);
   }
 }
@@ -108,6 +119,7 @@ mkdirSync(output, { recursive: true });
 for (const snippet of snippets) {
   const slug = snippet.file.replace(/[^a-zA-Z0-9]+/g, "_");
   const name = `${slug}__L${snippet.line}.${snippet.extension}`;
+
   writeFileSync(
     path.join(output, name),
     `// ${snippet.file}:${snippet.line}\n${snippet.body.join("\n")}\nexport {};\n`,
@@ -173,12 +185,15 @@ if (result.status !== 0) {
           candidate.file.replace(/[^a-zA-Z0-9]+/g, "_") === slug &&
           String(candidate.line) === start,
       );
+
       if (snippet === undefined) {
         return match;
       }
+
       return `${snippet.file}:${Number(start) + Number(offset) - 1}`;
     },
   );
+
   process.stderr.write(located);
   process.stderr.write(
     `\nSome of the ${snippets.length} snippets do not compile.\n`,

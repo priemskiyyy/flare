@@ -14,6 +14,7 @@ export const fitReport = (
   totalSize: number,
 ): SanitizedReport => {
   let excess = sizeOf(report) - totalSize;
+
   if (excess <= 0) {
     return report;
   }
@@ -25,6 +26,7 @@ export const fitReport = (
   while (excess > 0 && breadcrumbs.length > 0) {
     excess -= sizeOf(breadcrumbs.shift());
   }
+
   if (breadcrumbs.length < report.breadcrumbs.length) {
     losses.push({ path: "breadcrumbs", reason: "truncated" });
   }
@@ -33,6 +35,7 @@ export const fitReport = (
     if (excess <= 0) {
       break;
     }
+
     excess -= sizeOf(contexts[name]);
     delete contexts[name];
     losses.push({ path: `contexts.${name}`, reason: "truncated" });

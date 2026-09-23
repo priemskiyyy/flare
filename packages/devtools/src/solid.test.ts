@@ -15,6 +15,7 @@ afterEach(() => {
 const create = () => {
   const mock = createMockAdapter({ name: "mocked" });
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   return { mock, flare };
 };
 
@@ -23,6 +24,7 @@ test("the Solid wrapper mounts the inspector for the provider's Flare, follows a
   const second = create();
   const subscribe = vi.spyOn(second.flare.diagnostics, "subscribe");
   const [flare, setFlare] = createSignal(first.flare);
+
   const { container, unmount } = render(() =>
     createComponent(FlareProvider, {
       get flare() {
@@ -33,6 +35,7 @@ test("the Solid wrapper mounts the inspector for the provider's Flare, follows a
       },
     }),
   );
+
   const host = container.querySelector("[data-flare-devtools]");
 
   expect(host?.shadowRoot?.textContent).toContain("All destinations");

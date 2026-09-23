@@ -17,6 +17,7 @@ const create = (
       }),
     },
   });
+
   return { fake, flare };
 };
 
@@ -32,6 +33,7 @@ test("creating the adapter calls nothing on the SDK", () => {
 
 test("an empty report tag set still clears the reserved tags section on the event", () => {
   const { fake, flare } = create();
+
   fake.sdk.addMetadata("tags", { owner: "provider account" });
   flare.start();
   flare.capture(new Error("no tags"));
@@ -43,18 +45,22 @@ test("an empty report tag set still clears the reserved tags section on the even
 test("a mapping failure discards the event and settles as failed even after an asynchronous SDK hook", async () => {
   const fake = fakeBugsnag();
   const failure = new Error("breadcrumb construction failed");
+
   class BrokenBreadcrumb extends fake.Breadcrumb {
     constructor() {
       super();
       throw failure;
     }
   }
+
   const { flare } = create({ Breadcrumb: BrokenBreadcrumb }, fake);
+
   flare.start();
   flare.breadcrumb("opened");
   fake.state.holdBeforeOnError = true;
 
   const receipt = flare.capture(new Error("original"));
+
   expect(() => fake.release()).not.toThrow();
 
   await expect(receipt.settled).resolves.toEqual({
@@ -66,7 +72,9 @@ test("a mapping failure discards the event and settles as failed even after an a
 
 test("an exception reaches Bugsnag as an Error rebuilt from the sanitized report, with its causes", () => {
   const { fake, flare } = create();
+
   flare.start();
+
   const thrown = new TypeError("upload failed", {
     cause: new Error("disk full"),
   });
@@ -84,6 +92,7 @@ test("an exception reaches Bugsnag as an Error rebuilt from the sanitized report
 
 test("user, severity, operation, tags, contexts and breadcrumbs are applied to the event only", () => {
   const { fake, flare } = create();
+
   flare.start();
   flare.user({ id: "ada", email: "ada@example.com", name: "Ada" });
   flare.breadcrumb("uploadStarted", { kind: "avatar" });
@@ -120,6 +129,7 @@ test("user, severity, operation, tags, contexts and breadcrumbs are applied to t
 
 test("Bugsnag's display context is the operation, and Flare contexts stay in metadata", () => {
   const { fake, flare } = create();
+
   flare.start();
 
   flare.capture(new Error("boom"), { contexts: { checkout: { step: 2 } } });
@@ -130,6 +140,7 @@ test("Bugsnag's display context is the operation, and Flare contexts stay in met
 
 test("a report's context replaces a section of the same name on the event, and is never merged into it", () => {
   const { fake, flare } = create();
+
   flare.start();
   fake.sdk.addMetadata("upload", { kind: "avatar", attempt: 1 });
 
@@ -149,6 +160,7 @@ test.each([
   "reserved metadata sections cannot be replaced by report contexts ($error.name)",
   async ({ error, aggregated }) => {
     const { fake, flare } = create();
+
     flare.start();
 
     const receipt = flare.capture(error, {
@@ -185,12 +197,14 @@ test.each([
 
 test("breadcrumb time is handed over as a Date", () => {
   const fake = fakeBugsnag();
+
   const flare = new Flare({
     destinations: {
       bugsnag: bugsnag({ sdk: fake.sdk, Breadcrumb: fake.Breadcrumb }),
     },
     now: () => 1_767_225_600_500,
   });
+
   flare.start();
   flare.breadcrumb("opened");
 
@@ -204,15 +218,19 @@ test("breadcrumb time is handed over as a Date", () => {
 test("Bugsnag's own breadcrumbs stay on the event, in time order with Flare's", () => {
   const fake = fakeBugsnag();
   let clock = 1_000;
+
   const flare = new Flare({
     destinations: {
       bugsnag: bugsnag({ sdk: fake.sdk, Breadcrumb: fake.Breadcrumb }),
     },
     now: () => clock,
   });
+
   flare.start();
   flare.breadcrumb("flare-first");
+
   const automatic = new fake.Breadcrumb();
+
   automatic.message = "bugsnag-navigation";
   automatic.timestamp = new Date(2_000);
   fake.client.breadcrumbs.push(automatic);
@@ -229,6 +247,7 @@ test("Bugsnag's own breadcrumbs stay on the event, in time order with Flare's", 
 
 test("an anonymous report clears the user the client would otherwise copy onto the event", () => {
   const { fake, flare } = create();
+
   flare.start();
   fake.sdk.setUser("left-behind", "old@example.com", "Old");
 
@@ -248,6 +267,7 @@ test("an anonymous report clears the user the client would otherwise copy onto t
 
 test("concurrent reports for different accounts never share an event", () => {
   const { fake, flare } = create();
+
   flare.start();
 
   flare.capture(new Error("as ada"), {
@@ -266,6 +286,7 @@ test("concurrent reports for different accounts never share an event", () => {
 
 test("fatal has no Bugsnag severity, so it is sent as error and the loss is recorded", async () => {
   const { fake, flare } = create();
+
   flare.start();
 
   const status = await flare.capture(new Error("boom"), { level: "fatal" })
@@ -284,6 +305,7 @@ test("fatal has no Bugsnag severity, so it is sent as error and the loss is reco
 
 test("aggregated errors travel as metadata, since Bugsnag has no field for them", () => {
   const { fake, flare } = create();
+
   flare.start();
 
   flare.capture(
@@ -300,10 +322,13 @@ test("aggregated errors travel as metadata, since Bugsnag has no field for them"
 
 test("the callback is the evidence, and it cannot tell delivered from enqueued or discarded", async () => {
   const { fake, flare } = create();
+
   flare.start();
 
   const delivered = await flare.capture(new Error("sent")).settled;
+
   fake.state.applicationKeepsEvents = false;
+
   const discarded = await flare.capture(
     new Error("discarded by the application's onError"),
   ).settled;
@@ -314,6 +339,7 @@ test("the callback is the evidence, and it cannot tell delivered from enqueued o
     event: null,
     losses: [],
   };
+
   expect(delivered).toEqual({
     state: "settled",
     outcomes: { bugsnag: submitted },
@@ -328,6 +354,7 @@ test("the callback is the evidence, and it cannot tell delivered from enqueued o
 test("a delivery error reported by the callback is a failed outcome", async () => {
   const failure = new Error("delivery failed");
   const { fake, flare } = create();
+
   flare.start();
   fake.state.deliveryError = failure;
 
@@ -339,10 +366,12 @@ test("a delivery error reported by the callback is a failed outcome", async () =
 
 test("the outcome waits for the callback, not for notify to return", async () => {
   const { fake, flare } = create();
+
   flare.start();
   fake.state.hold = true;
 
   const receipt = flare.capture(new Error("boom"));
+
   await Promise.resolve();
 
   expect(receipt.status.get()).toEqual({
@@ -361,11 +390,14 @@ test.each([false, true])(
   "without the Breadcrumb class breadcrumbs stay unsupported with mirroring %s",
   async (mirrored) => {
     const fake = fakeBugsnag();
+
     const adapter = bugsnag({
       sdk: fake.sdk,
       ambient: { breadcrumbs: mirrored },
     });
+
     const flare = new Flare({ destinations: { bugsnag: adapter } });
+
     flare.start();
     flare.breadcrumb("opened");
 
@@ -385,6 +417,7 @@ test("a message is skipped by default, because Bugsnag can only carry it as a fa
   const fake = fakeBugsnag();
   const adapter = bugsnag({ sdk: fake.sdk });
   const flare = new Flare({ destinations: { bugsnag: adapter } });
+
   flare.start();
 
   const status = await flare.message("Unexpected payment state").settled;
@@ -401,6 +434,7 @@ test("a message is skipped by default, because Bugsnag can only carry it as a fa
 
 test("messages can be opted into as errors, and the lossy mapping is recorded", async () => {
   const { fake, flare } = create({ messages: "as-error" });
+
   flare.start();
 
   const status = await flare.message("Unexpected payment state", {
@@ -475,6 +509,7 @@ test("the capabilities say what the browser SDK can honestly do", () => {
 
 test("the native handle is the SDK the application injected, and one SDK cannot be registered twice", () => {
   const { fake, flare } = create();
+
   flare.start();
 
   expect(flare.destination("bugsnag").native).toBe(fake.sdk);

@@ -20,13 +20,16 @@ export const fakeTraceSource = <TEvents extends Record<string, unknown>>({
   const source: TraceEventSource<TEvents> = {
     subscribe: (listener) => {
       listeners.add(listener);
+
       for (const event of history) {
         listener(event);
       }
+
       return () => {
         if (ignoresUnsubscribe) {
           return;
         }
+
         listeners.delete(listener);
       };
     },

@@ -8,16 +8,20 @@ const create = (
   ambient: NonNullable<Parameters<typeof crashlytics>[0]["ambient"]>,
 ) => {
   const fake = fakeCrashlytics();
+
   const flare = new Flare({
     destinations: { crashlytics: crashlytics({ sdk: fake.sdk, ambient }) },
   });
+
   flare.start();
+
   return { fake, flare };
 };
 
 test("prototype-named keys reach native setters and can be blanked", () => {
   const { fake, flare } = create({ tags: true });
   const setAttributes = vi.spyOn(fake.sdk, "setAttributes");
+
   flare.tag("__proto__", "value");
 
   expect(JSON.stringify(setAttributes.mock.calls.at(-1)?.[1])).toBe(
@@ -33,9 +37,11 @@ test("prototype-named keys reach native setters and can be blanked", () => {
 
 test("without the ambient option nothing is ever written to Crashlytics' global state", () => {
   const fake = fakeCrashlytics();
+
   const flare = new Flare({
     destinations: { crashlytics: crashlytics({ sdk: fake.sdk }) },
   });
+
   flare.start();
 
   flare.user({ id: "ada" });
@@ -70,6 +76,7 @@ test("only the parts that were asked for are mirrored", () => {
   const onlyContexts = create({ contexts: true });
   const onlyUser = create({ user: true });
   const onlyTags = create({ tags: true });
+
   for (const { flare } of [onlyContexts, onlyUser, onlyTags]) {
     flare.user({ id: "ada" });
     flare.tag("plan", "pro");
@@ -117,6 +124,7 @@ test("tags and contexts become string keys, with contexts flattened under their 
 
 test("Crashlytics cannot delete a key, so a removed tag or context is blanked", () => {
   const { fake, flare } = create({ tags: true, contexts: true });
+
   flare.tag("plan", "pro");
   flare.context("upload", { kind: "avatar", attempt: 1 });
 
@@ -132,6 +140,7 @@ test("Crashlytics cannot delete a key, so a removed tag or context is blanked", 
 
 test("an account change blanks every key the previous account left", () => {
   const { fake, flare } = create({ user: true, tags: true, contexts: true });
+
   flare.user({ id: "ada" });
   flare.tag("plan", "pro");
   flare.context("workspace", { owner: "ada" });
@@ -144,6 +153,7 @@ test("an account change blanks every key the previous account left", () => {
 
 test("only the first 64 distinct keys are written, and a value is cut at 1024 characters", () => {
   const { fake, flare } = create({ tags: true, contexts: true });
+
   // The core caps one object at 50 keys, so the overflow takes two contexts.
   const forty = Object.fromEntries(
     Array.from({ length: 40 }, (_, index) => [`key${index}`, index]),
@@ -160,6 +170,7 @@ test("only the first 64 distinct keys are written, and a value is cut at 1024 ch
   expect(fake.state.attributes.late).toBeUndefined();
 
   const roomy = create({ tags: true });
+
   roomy.flare.tag("note", "v".repeat(2_000));
 
   expect(roomy.fake.state.attributes.note).toHaveLength(1_024);
@@ -167,9 +178,11 @@ test("only the first 64 distinct keys are written, and a value is cut at 1024 ch
 
 test("a blanked key keeps its slot, because Crashlytics never gives one back", () => {
   const { fake, flare } = create({ tags: true, contexts: true });
+
   const forty = Object.fromEntries(
     Array.from({ length: 40 }, (_, index) => [`key${index}`, index]),
   );
+
   flare.context("first", forty);
   flare.context("second", forty);
 
@@ -195,8 +208,11 @@ test("breadcrumbs become log lines", () => {
 
 test("a native setter that rejects is contained", async () => {
   const unhandled = vi.fn();
+
   process.on("unhandledRejection", unhandled);
+
   const { fake, flare } = create({ user: true, tags: true, contexts: true });
+
   fake.state.rejectSetters = true;
 
   expect(() => {
@@ -216,6 +232,7 @@ test("with user mirroring on, a report for the mirrored user is recorded and car
     contexts: true,
     breadcrumbs: true,
   });
+
   flare.user({ id: "ada" });
   flare.tag("plan", "pro");
   flare.breadcrumb("opened");
@@ -234,12 +251,15 @@ test("with user mirroring on, a report for the mirrored user is recorded and car
 
 test("with user mirroring on, a report buffered under one account is not recorded under the next", async () => {
   const fake = fakeCrashlytics();
+
   const flare = new Flare({
     destinations: {
       crashlytics: crashlytics({ sdk: fake.sdk, ambient: { user: true } }),
     },
   });
+
   flare.user({ id: "ada" });
+
   const receipt = flare.capture(new Error("captured as ada, before start"));
 
   flare.user({ id: "grace" });
@@ -256,6 +276,7 @@ test("with user mirroring on, a report buffered under one account is not recorde
 
 test("with user mirroring on, a report given another user for itself is not recorded under the session's user", async () => {
   const { fake, flare } = create({ user: true });
+
   flare.user({ id: "ada" });
 
   const status = await flare.capture(new Error("on behalf of a customer"), {
@@ -272,6 +293,7 @@ test("with user mirroring on, a report given another user for itself is not reco
 
 test("without user mirroring Flare wrote no user, so every report is recorded", async () => {
   const { fake, flare } = create({ tags: true, contexts: true });
+
   flare.user({ id: "ada" });
 
   await flare.capture(new Error("boom"), { user: { id: "customer-7" } })
@@ -282,6 +304,7 @@ test("without user mirroring Flare wrote no user, so every report is recorded", 
 
 test("disposing blanks the user id and every key Flare wrote, and nothing else", () => {
   const { fake, flare } = create({ user: true, tags: true, contexts: true });
+
   fake.state.attributes.release = "set by the application";
   flare.user({ id: "ada" });
   flare.tag("plan", "pro");

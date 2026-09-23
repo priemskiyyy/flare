@@ -28,9 +28,11 @@ export const typed = new Flare({
 // Destination names flow into routing, receipts and handles.
 typed.capture(new Error("typed"), { to: ["mock", "sdk"] });
 export const outcome = typed.capture(new Error("typed")).status.get();
+
 if (outcome.state === "settled") {
   outcome.outcomes.sdk?.status satisfies string | undefined;
 }
+
 typed.flush().then((result) => result.destinations.mock?.status);
 
 // @ts-expect-error -- "sentry" is not a registered destination.
@@ -99,6 +101,7 @@ untyped.tag("nested", { no: true });
 
 // A reusable route is input, so callers need not make a mutable copy.
 const primaryRoute = ["sdk"] as const;
+
 export const routed = new Flare({
   destinations: { sdk: sdkAdapter },
   default: primaryRoute,

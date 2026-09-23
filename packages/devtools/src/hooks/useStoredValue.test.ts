@@ -16,6 +16,7 @@ test("reads the stored value, writes updates, and follows other tabs", () => {
   createRoot((dispose) => {
     const [count, setCount] = useStoredValue("count", parseCount, 0);
     const [broken] = useStoredValue("broken", parseCount, 7);
+
     expect(count()).toBe(3);
     expect(broken()).toBe(7);
 
@@ -34,10 +35,12 @@ test("reads the stored value, writes updates, and follows other tabs", () => {
 
 test("a disposed owner stops following other tabs", () => {
   localStorage.setItem("count", "1");
+
   let read = () => 0;
 
   createRoot((dispose) => {
     const [count] = useStoredValue("count", parseCount, 0);
+
     read = count;
     dispose();
   });

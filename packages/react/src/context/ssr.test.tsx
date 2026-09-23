@@ -16,11 +16,14 @@ test("SSR is inert and hydrates from the same snapshots without a mismatch", asy
   const flare = new Flare({ destinations: { primary: mock.adapter } });
   const subscribe = vi.spyOn(flare.status, "subscribe");
   const onRecoverableError = vi.fn();
+
   const View = () => {
     const status = useFlareStatus();
     const destination = useDestinationStatus("primary");
+
     return <span>{`${status.state}/${destination.state}`}</span>;
   };
+
   const view = (
     <FlareProvider flare={flare}>
       <FlareErrorBoundary fallback={null}>
@@ -39,10 +42,14 @@ test("SSR is inert and hydrates from the same snapshots without a mismatch", asy
   // The client has already started Flare by the time it hydrates. The first
   // client render must still match the server's markup.
   flare.start();
+
   const container = document.createElement("div");
+
   container.innerHTML = html;
   document.body.append(container);
+
   let root: ReturnType<typeof hydrateRoot> | undefined;
+
   await act(async () => {
     root = hydrateRoot(container, view, { onRecoverableError });
     await Promise.resolve();

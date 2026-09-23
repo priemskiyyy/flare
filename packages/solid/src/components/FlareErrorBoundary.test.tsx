@@ -10,8 +10,10 @@ import { FlareErrorBoundary, FlareProvider } from "src/index";
 import type { FlareErrorBoundaryProps } from "src/index";
 
 const disposals: Array<() => void> = [];
+
 afterEach(() => {
   cleanup();
+
   for (const dispose of disposals.splice(0).reverse()) {
     dispose();
   }
@@ -20,16 +22,20 @@ afterEach(() => {
 const create = () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
   disposals.push(flare.dispose);
+
   return { mock, flare };
 };
 
 const [isBroken, setIsBroken] = createSignal(true);
+
 const Widget = () => {
   if (isBroken()) {
     throw new Error("the widget could not render");
   }
+
   return <p>the widget renders</p>;
 };
 
@@ -39,6 +45,7 @@ const renderBoundary = (
   children: () => JSX.Element = () => <Widget />,
 ) => {
   setIsBroken(true);
+
   return render(() => (
     <FlareProvider flare={flare}>
       <FlareErrorBoundary fallback={<p>something went wrong</p>} {...props}>
@@ -74,6 +81,7 @@ test("capture options shape the report the boundary makes, contexts included", (
   });
 
   const report = mock.submissions[0]?.report;
+
   expect(report?.tags).toEqual({ area: "cart" });
   expect(report?.level).toBe("fatal");
   expect(report?.operation).toBe("render-cart");
@@ -83,9 +91,11 @@ test("capture options shape the report the boundary makes, contexts included", (
 test("a fallback function receives the error and a reset that renders the children again", () => {
   const { mock, flare } = create();
   const seen: unknown[] = [];
+
   const view = renderBoundary(flare, {
     fallback: ({ error, reset }) => {
       seen.push(error);
+
       return (
         <button type="button" onClick={reset}>
           try again
@@ -93,6 +103,7 @@ test("a fallback function receives the error and a reset that renders the childr
       );
     },
   });
+
   expect(seen[0]).toBeInstanceOf(Error);
 
   setIsBroken(false);
@@ -104,6 +115,7 @@ test("a fallback function receives the error and a reset that renders the childr
 
 test("a second error after a reset is a new report", () => {
   const { mock, flare } = create();
+
   const view = renderBoundary(flare, {
     fallback: ({ reset }) => (
       <button type="button" onClick={reset}>
@@ -133,6 +145,7 @@ test("an onError callback is told after the report is made, with its receipt", a
 
 test("reporting reads no signal, so a later session change does not make the boundary report again", () => {
   const { mock, flare } = create();
+
   renderBoundary(flare);
 
   flare.user({ id: "ada" });

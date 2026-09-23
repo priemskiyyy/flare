@@ -22,6 +22,7 @@ test("a receipt starts pending with every selected destination unanswered", () =
 test("it settles once every destination has answered, not before", async () => {
   const { receipt, settle } = createReceipt("report-1", ["sentry", "backend"]);
   const settled = vi.fn();
+
   receipt.settled.then(settled);
 
   settle("sentry", submitted);
@@ -89,6 +90,7 @@ test("a dropped report settles at once with its reason", async () => {
 test("observers are told as each answer arrives", () => {
   const { receipt, settle } = createReceipt("report-1", ["sentry", "backend"]);
   const listener = vi.fn();
+
   receipt.status.subscribe(listener);
 
   settle("sentry", submitted);

@@ -6,8 +6,10 @@ export const unrefTimer = (timer: ReturnType<typeof setTimeout>) => {
   if (typeof timer !== "object") {
     return;
   }
+
   if (typeof timer.unref !== "function") {
     return;
   }
+
   timer.unref();
 };

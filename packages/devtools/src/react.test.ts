@@ -16,6 +16,7 @@ afterEach(() => {
 const create = () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   const tree = createElement(
     StrictMode,
     null,
@@ -25,6 +26,7 @@ const create = () => {
       createElement(FlareDevtools, { initialIsOpen: true }),
     ),
   );
+
   return { mock, flare, tree };
 };
 
@@ -32,10 +34,13 @@ test("Strict Mode mounts one inspector, and unmounting leaves no listener behind
   const { mock, flare, tree } = create();
   const live = { count: 0 };
   const subscribe = flare.diagnostics.events.subscribe;
+
   vi.spyOn(flare.diagnostics.events, "subscribe").mockImplementation(
     (listener) => {
       live.count += 1;
+
       const stop = subscribe(listener);
+
       return () => {
         live.count -= 1;
         stop();

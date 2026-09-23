@@ -15,6 +15,7 @@ afterEach(() => {
 const create = () => {
   const mock = createMockAdapter({ name: "mocked" });
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   return { mock, flare };
 };
 
@@ -34,9 +35,11 @@ test("the Vue wrapper mounts the inspector for the provider's Flare, follows ano
   const current = shallowRef(first.flare);
   const subscribe = vi.spyOn(second.flare.diagnostics, "subscribe");
   const wrapper = mount(Application(current));
+
   await nextTick();
 
   const host = wrapper.find("[data-flare-devtools]").element;
+
   expect(host.shadowRoot?.textContent).toContain("All destinations");
   expect(first.mock.openings).toEqual([]);
 

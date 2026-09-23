@@ -20,17 +20,21 @@ export const prepareContexts = (
   for (const [name, raw] of Object.entries(contexts)) {
     const path = `contexts.${name}`;
     const validation = validateDeclared(declared, name, raw);
+
     if (!validation.valid || !isRecord(validation.value)) {
       losses.push({ path, reason: "invalid" });
       continue;
     }
 
     const sanitized = sanitizeValue(validation.value, path, policy);
+
     losses.push(...sanitized.losses);
+
     // A path rule naming the whole context leaves a marker, not an object.
     if (!isRecord(sanitized.value)) {
       continue;
     }
+
     value[name] = sanitized.value;
   }
 

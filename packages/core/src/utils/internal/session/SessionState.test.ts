@@ -9,10 +9,12 @@ const crumb = (name: string) => ({ name, data: null, timestamp: 1 });
 
 const filled = () => {
   const session = new SessionState({ maxBreadcrumbs: 10 });
+
   session.identify(ada);
   session.setTag("area", "upload");
   session.setContext("upload", { attempt: 1 });
   session.addBreadcrumb(crumb("opened"));
+
   return session;
 };
 
@@ -82,7 +84,9 @@ test("signing out is an identity change too", () => {
 
 test("signing out while anonymous changes nothing", () => {
   const session = new SessionState({ maxBreadcrumbs: 10 });
+
   session.addBreadcrumb(crumb("opened"));
+
   const before = session.state.get();
 
   expect(session.identify(signedOut)).toBe(false);
@@ -97,6 +101,7 @@ test("unchanged metadata preserves the snapshot and does not notify observers", 
   const session = filled();
   const before = session.state.get();
   const listener = vi.fn();
+
   session.state.subscribe(listener);
 
   session.identify({ user: { id: "ada" }, identity: "ada" });
@@ -110,6 +115,7 @@ test("unchanged metadata preserves the snapshot and does not notify observers", 
 
 test("identity follows the real id even when the visible user is redacted", () => {
   const session = new SessionState({ maxBreadcrumbs: 10 });
+
   session.identify({ user: { id: "[Redacted]" }, identity: "ada" });
 
   expect(
@@ -120,6 +126,7 @@ test("identity follows the real id even when the visible user is redacted", () =
 
 test("tags are set independently and a tag can be removed", () => {
   const session = new SessionState({ maxBreadcrumbs: 10 });
+
   session.setTag("area", "upload");
   session.setTag("plan", "pro");
   session.setTag("area", "editor");
@@ -130,6 +137,7 @@ test("tags are set independently and a tag can be removed", () => {
 
 test("a context is replaced by name, never merged with its previous value", () => {
   const session = new SessionState({ maxBreadcrumbs: 10 });
+
   session.setContext("upload", { kind: "avatar", attempt: 1 });
   session.setContext("upload", { attempt: 2 });
 
@@ -142,6 +150,7 @@ test("a context is replaced by name, never merged with its previous value", () =
 
 test("breadcrumbs beyond the limit push the oldest out", () => {
   const session = new SessionState({ maxBreadcrumbs: 2 });
+
   session.addBreadcrumb(crumb("first"));
   session.addBreadcrumb(crumb("second"));
   session.addBreadcrumb(crumb("third"));
@@ -154,6 +163,7 @@ test("breadcrumbs beyond the limit push the oldest out", () => {
 
 test("a zero breadcrumb limit retains no history", () => {
   const session = new SessionState({ maxBreadcrumbs: 0 });
+
   session.addBreadcrumb(crumb("first"));
   session.addBreadcrumb(crumb("second"));
 
@@ -184,6 +194,7 @@ test("a snapshot taken earlier never changes, whatever the session does next", (
 test("observers hear about every change", () => {
   const session = new SessionState({ maxBreadcrumbs: 10 });
   const listener = vi.fn();
+
   session.state.subscribe(listener);
 
   session.setTag("area", "upload");

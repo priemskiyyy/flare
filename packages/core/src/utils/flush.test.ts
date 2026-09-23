@@ -10,9 +10,11 @@ afterEach(() => {
 test("flush reports the core drain and how far each destination's own flush got", async () => {
   const flushing = createMockAdapter({ flush: true });
   const bare = createMockAdapter();
+
   const flare = new Flare({
     destinations: { flushing: flushing.adapter, bare: bare.adapter },
   });
+
   flare.start();
   flare.capture(new Error("boom"));
 
@@ -29,10 +31,12 @@ test("flush reports the core drain and how far each destination's own flush got"
 test("flush is a barrier: captures made after the call do not extend it", async () => {
   const mock = createMockAdapter({ hold: true, flush: true });
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
   flare.capture(new Error("before"));
 
   const flushed = flare.flush({ timeoutMs: 1_000 });
+
   flare.capture(new Error("after"));
   mock.submissions[0]?.settle();
 
@@ -45,12 +49,16 @@ test("flush is a barrier: captures made after the call do not extend it", async 
 
 test("a flush that times out says so, and neither cancels nor disproves the submission", async () => {
   vi.useFakeTimers();
+
   const mock = createMockAdapter({ hold: true, flush: true });
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
+
   const receipt = flare.capture(new Error("slow"));
 
   const flushed = flare.flush({ timeoutMs: 200 });
+
   await vi.advanceTimersByTimeAsync(200);
 
   await expect(flushed).resolves.toEqual({
@@ -81,6 +89,7 @@ test("flush before start says not-ready rather than pretending", async () => {
 test("a provider whose flush throws is a failed boundary, not a rejected promise", async () => {
   const failure = new Error("flush threw");
   const mock = createMockAdapter();
+
   const flare = new Flare({
     destinations: {
       primary: {
@@ -101,6 +110,7 @@ test("a provider whose flush throws is a failed boundary, not a rejected promise
       },
     },
   });
+
   flare.start();
 
   await expect(flare.flush()).resolves.toEqual({

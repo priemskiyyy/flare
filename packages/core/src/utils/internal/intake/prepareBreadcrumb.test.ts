@@ -19,6 +19,7 @@ const uploadStarted: StandardSchema<Record<string, unknown>> = {
       if (typeof value === "object" && value !== null && "kind" in value) {
         return { value: { kind: value.kind } };
       }
+
       return { issues: [{ message: "kind is required" }] };
     },
   },

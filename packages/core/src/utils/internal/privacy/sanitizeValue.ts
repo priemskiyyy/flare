@@ -19,9 +19,11 @@ const matchesRule = (rule: RedactRule, key: string | null, path: string) => {
     if (rule === path) {
       return true;
     }
+
     if (key === null) {
       return false;
     }
+
     return rule.toLowerCase() === key.toLowerCase();
   }
 
@@ -31,6 +33,7 @@ const matchesRule = (rule: RedactRule, key: string | null, path: string) => {
 
   // A global or sticky RegExp remembers where it stopped; every key starts over.
   rule.lastIndex = 0;
+
   return rule.test(key);
 };
 
@@ -44,9 +47,12 @@ const truncated = (walk: Walk, path: string) => {
 const spend = (walk: Walk, cost: number) => {
   if (cost > walk.remaining) {
     walk.remaining = 0;
+
     return false;
   }
+
   walk.remaining -= Math.max(1, cost);
+
   return true;
 };
 
@@ -70,20 +76,26 @@ const readObjectDescriptors = (value: object, limit: number) => {
   try {
     const maxEntries = Number.isNaN(limit) ? 0 : Math.trunc(limit);
     const entries: Array<[string, PropertyDescriptor]> = [];
+
     // Retain a snapshot before scrubbing, without copying every input descriptor.
     for (const key of Reflect.ownKeys(value)) {
       if (typeof key !== "string") {
         continue;
       }
+
       const descriptor = Object.getOwnPropertyDescriptor(value, key);
+
       if (descriptor?.enumerable !== true) {
         continue;
       }
+
       if (entries.length >= maxEntries) {
         return { entries, truncated: true };
       }
+
       entries.push([key, descriptor]);
     }
+
     return { entries, truncated: false };
   } catch {
     return null;
@@ -96,13 +108,16 @@ const readArrayDescriptors = (value: unknown[], limit: number) => {
       value,
       "length",
     )?.value;
+
     if (typeof length !== "number") {
       return null;
     }
+
     // Snapshot only the retained prefix before any scrubber can change the input.
     const items = Array.from({ length: Math.min(length, limit) }, (_, index) =>
       Object.getOwnPropertyDescriptor(value, index),
     );
+
     return { length, items };
   } catch {
     return null;
@@ -116,6 +131,7 @@ const sanitizeArray = (
   depth: number,
 ) => {
   const array = readArrayDescriptors(value, walk.policy.limits.breadth);
+
   if (array === null) {
     return "[Unreadable]";
   }
@@ -128,6 +144,7 @@ const sanitizeArray = (
     if (descriptor === undefined) {
       return null;
     }
+
     const sanitized = sanitizeProperty(
       walk,
       descriptor,
@@ -135,8 +152,10 @@ const sanitizeArray = (
       `${path}.${index}`,
       depth,
     );
+
     return sanitized === OMIT ? null : sanitized;
   });
+
   return Object.freeze(result);
 };
 
@@ -170,6 +189,7 @@ const sanitizeObject = (
   depth: number,
 ) => {
   const descriptors = readObjectDescriptors(value, walk.policy.limits.breadth);
+
   if (descriptors === null) {
     return "[Unreadable]";
   }
@@ -179,6 +199,7 @@ const sanitizeObject = (
   }
 
   const result: Record<string, unknown> = Object.create(null);
+
   for (const [key, descriptor] of descriptors.entries) {
     if (!spend(walk, key.length)) {
       truncated(walk, path);
@@ -192,11 +213,14 @@ const sanitizeObject = (
       `${path}.${key}`,
       depth,
     );
+
     if (sanitized === OMIT) {
       continue;
     }
+
     result[key] = sanitized;
   }
+
   return Object.freeze(result);
 };
 
@@ -216,14 +240,17 @@ const sanitizeContainer = (
 
   if (depth >= walk.policy.limits.depth) {
     truncated(walk, path);
+
     return "[Depth limit]";
   }
 
   walk.ancestors.add(value);
+
   try {
     if (Array.isArray(value)) {
       return sanitizeArray(walk, value, path, depth);
     }
+
     return sanitizeObject(walk, value, path, depth);
   } finally {
     walk.ancestors.delete(value);
@@ -272,22 +299,28 @@ const sanitize = (
 
   if (walk.remaining <= 0) {
     truncated(walk, path);
+
     return "[Size limit]";
   }
 
   if (typeof value === "object") {
     if (!spend(walk, 2)) {
       truncated(walk, path);
+
       return "[Size limit]";
     }
+
     return sanitizeContainer(walk, value, path, depth);
   }
 
   const leaf = sanitizeLeaf(walk, value, path);
+
   if (!spend(walk, String(leaf).length)) {
     truncated(walk, path);
+
     return "[Size limit]";
   }
+
   return leaf;
 };
 
@@ -305,14 +338,17 @@ export const sanitizeValue = (
   if (value === undefined || value === null) {
     return { value: null, losses: [] };
   }
+
   const walk: Walk = {
     policy,
     ancestors: new Set(),
     remaining: policy.limits.totalSize,
     losses: [],
   };
+
   if (isRedacted(walk, null, path)) {
     return { value: REDACTED, losses: [] };
   }
+
   return { value: sanitize(walk, value, path, 0), losses: walk.losses };
 };

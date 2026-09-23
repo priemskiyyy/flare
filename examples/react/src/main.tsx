@@ -10,14 +10,17 @@ import "src/styles.css";
 
 const backend = createExampleBackend();
 const flare = createExampleFlare({ fetch: backend.fetch });
+
 flare.start();
 
 const container = document.getElementById("root");
+
 if (container === null) {
   throw new Error("The page has no #root element.");
 }
 
 const root = createRoot(container);
+
 root.render(
   <StrictMode>
     <FlareProvider flare={flare}>

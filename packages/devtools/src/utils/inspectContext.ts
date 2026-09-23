@@ -35,6 +35,7 @@ export const inspectContext = (context: unknown) => {
     }
 
     seen.add(value);
+
     const entries = Object.entries(Object.getOwnPropertyDescriptors(value));
     const result: Record<string, unknown> = Object.create(null);
 

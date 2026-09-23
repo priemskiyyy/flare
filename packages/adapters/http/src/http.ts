@@ -36,10 +36,13 @@ const normalizeHeaders = (headers: Record<string, string> = {}) =>
 const readEvent = async (response: { json: () => Promise<unknown> }) => {
   try {
     const body = await response.json();
+
     if (typeof body !== "object" || body === null || !("id" in body)) {
       return null;
     }
+
     const { id } = body;
+
     return typeof id === "string" ? { id } : null;
   } catch {
     // An acknowledgement needs no body, and a body need not be JSON.
@@ -76,7 +79,9 @@ export const http = ({
     if (context.signal.aborted) {
       return { status: "indeterminate", reason: "ambiguous" };
     }
+
     const send = resolveFetch();
+
     if (typeof send !== "function") {
       return {
         status: "failed",
@@ -88,24 +93,30 @@ export const http = ({
 
     const isCurrentAccount = () =>
       context.currentGeneration() === report.identity.generation;
+
     const shared = normalizeHeaders(
       typeof headers === "function" ? await headers() : headers,
     );
+
     if (context.signal.aborted) {
       return { status: "indeterminate", reason: "ambiguous" };
     }
 
     let credentials: Record<string, string> = {};
+
     if (typeof authorize === "function") {
       if (!isCurrentAccount()) {
         return SUBJECT_MISMATCH;
       }
+
       credentials = normalizeHeaders(
         await authorize({ user: report.identity.user }),
       );
+
       if (context.signal.aborted) {
         return { status: "indeterminate", reason: "ambiguous" };
       }
+
       // The account can change while its credentials are being fetched. Nothing
       // asynchronous may sit between this check and the request.
       if (!isCurrentAccount()) {
@@ -148,6 +159,7 @@ export const http = ({
       if (typeof resolveFetch() === "function") {
         return { available: true };
       }
+
       return {
         available: false,
         reason:

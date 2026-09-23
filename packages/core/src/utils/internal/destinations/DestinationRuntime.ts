@@ -68,7 +68,9 @@ export class DestinationRuntime<TNative = unknown> {
 
   constructor(options: Options<TNative>) {
     this.#options = options;
+
     const { eventLocal, ...capabilities } = options.adapter.capabilities;
+
     this.capabilities = Object.freeze({
       ...capabilities,
       eventLocal: Object.freeze({ ...eventLocal }),
@@ -78,6 +80,7 @@ export class DestinationRuntime<TNative = unknown> {
   status: ObservableValue<DestinationStatus> = {
     get: () => {
       const current = this.#state.get();
+
       // The session is private. Observers receive only the public status.
       return current.state === "ready" ? READY_STATUS : current;
     },
@@ -95,9 +98,11 @@ export class DestinationRuntime<TNative = unknown> {
   /** The provider handle, or `null` unless the destination is ready. Reading it starts nothing. */
   get native() {
     const current = this.#state.get();
+
     if (current.state !== "ready") {
       return null;
     }
+
     return current.session.native;
   }
 
@@ -112,34 +117,43 @@ export class DestinationRuntime<TNative = unknown> {
   /** Opens the adapter. A second call does nothing unless the first start failed. */
   start = () => {
     const current = this.#state.get();
+
     if (current.state !== "idle" && current.state !== "failed") {
       return;
     }
 
     // Reserve the start before any observer or availability probe can reenter.
     const attempt = { state: "starting" } as const;
+
     if (!this.#become(attempt)) {
       return;
     }
+
     const availability = this.#probe();
+
     if (this.#state.get() !== attempt) {
       return;
     }
+
     if (!availability.available) {
       this.#become({ state: "unavailable", reason: availability.reason });
       this.#drain({ status: "skipped", reason: "unavailable" });
+
       return;
     }
 
     try {
       const opened = this.#options.adapter.open({ destination: this.name });
+
       if (isPromiseLike(opened)) {
         Promise.resolve(opened).then(
           (session) => this.#ready(attempt, session),
           (error: unknown) => this.#fail(attempt, error),
         );
+
         return;
       }
+
       this.#ready(attempt, opened);
     } catch (error) {
       this.#fail(attempt, error);
@@ -148,18 +162,22 @@ export class DestinationRuntime<TNative = unknown> {
 
   accept = (entry: Entry) => {
     const current = this.#state.get();
+
     if (current.state === "disposed") {
       this.#settle(entry, { status: "dropped", reason: "disposed" });
+
       return;
     }
 
     if (current.state === "unavailable") {
       this.#settle(entry, { status: "skipped", reason: "unavailable" });
+
       return;
     }
 
     if (current.state === "ready") {
       this.#submit(current.session, entry);
+
       return;
     }
 
@@ -169,6 +187,7 @@ export class DestinationRuntime<TNative = unknown> {
       current.state === "failed"
     ) {
       this.#hold(entry);
+
       return;
     }
 
@@ -180,25 +199,30 @@ export class DestinationRuntime<TNative = unknown> {
     timeoutMs: number,
   ): Promise<{ drained: boolean; boundary: DestinationFlushResult }> => {
     const current = this.#state.get();
+
     if (current.state !== "ready") {
       return { drained: false, boundary: { status: "not-ready" } };
     }
 
     const controller = new AbortController();
     const timeout = deferred<typeof TIMED_OUT>();
+
     const timer = setTimeout(() => {
       controller.abort();
       timeout.resolve(TIMED_OUT);
     }, timeoutMs);
+
     unrefTimer(timer);
 
     try {
       // Later submissions are not in this list, so they cannot extend the wait.
       const accepted = [...this.#flights].map((flight) => flight.done.promise);
+
       const drained = await Promise.race([
         Promise.all(accepted),
         timeout.promise,
       ]);
+
       if (drained === TIMED_OUT) {
         return { drained: false, boundary: { status: "timeout" } };
       }
@@ -206,7 +230,9 @@ export class DestinationRuntime<TNative = unknown> {
       if (this.#state.get() !== current) {
         return { drained: true, boundary: { status: "not-ready" } };
       }
+
       const { flush } = current.session;
+
       if (typeof flush !== "function") {
         return { drained: true, boundary: { status: "unsupported" } };
       }
@@ -215,9 +241,11 @@ export class DestinationRuntime<TNative = unknown> {
         flush.call(current.session, { timeoutMs, signal: controller.signal }),
         timeout.promise,
       ]);
+
       if (boundary === TIMED_OUT) {
         return { drained: true, boundary: { status: "timeout" } };
       }
+
       return { drained: true, boundary };
     } catch (error) {
       return { drained: true, boundary: { status: "failed", error } };
@@ -228,12 +256,15 @@ export class DestinationRuntime<TNative = unknown> {
 
   syncAmbient = (snapshot: AmbientSnapshot) => {
     const current = this.#state.get();
+
     if (current.state !== "ready") {
       return;
     }
+
     this.#contain("ambient session failed", () => {
       const ambient = current.session.ambient;
       const session = ambient?.session;
+
       if (typeof session === "function") {
         return session.call(ambient, snapshot);
       }
@@ -242,12 +273,15 @@ export class DestinationRuntime<TNative = unknown> {
 
   ambientBreadcrumb = (breadcrumb: Breadcrumb) => {
     const current = this.#state.get();
+
     if (current.state !== "ready") {
       return;
     }
+
     this.#contain("ambient breadcrumb failed", () => {
       const ambient = current.session.ambient;
       const push = ambient?.breadcrumb;
+
       if (typeof push === "function") {
         return push.call(ambient, breadcrumb);
       }
@@ -256,12 +290,14 @@ export class DestinationRuntime<TNative = unknown> {
 
   dispose = () => {
     const current = this.#state.get();
+
     if (current.state === "disposed") {
       return;
     }
 
     this.#become({ state: "disposed" });
     this.#drain({ status: "dropped", reason: "disposed" });
+
     for (const flight of [...this.#flights]) {
       flight.controller.abort();
       this.#land(flight, { status: "indeterminate", reason: "disposed" });
@@ -285,18 +321,24 @@ export class DestinationRuntime<TNative = unknown> {
 
   #ready(attempt: object, session: ReporterSession<TNative>) {
     const current = this.#state.get();
+
     // Disposed, or restarted, while this session was opening: it has no owner.
     if (current !== attempt) {
       this.#release(session);
+
       return;
     }
 
     if (!this.#become({ state: "ready", session })) {
       return;
     }
+
     this.syncAmbient(this.#options.readAmbient());
+
     const waiting = this.#buffer.splice(0);
+
     this.#scheduleExpiry();
+
     for (const entry of waiting) {
       this.accept(entry);
     }
@@ -304,18 +346,22 @@ export class DestinationRuntime<TNative = unknown> {
 
   #fail(attempt: object, error: unknown) {
     const current = this.#state.get();
+
     if (current !== attempt) {
       return;
     }
+
     // The buffer is kept: a later start() may still deliver it before it expires.
     this.#become({ state: "failed", error });
   }
 
   #become(state: State<TNative>) {
     this.#state.set(Object.freeze(state));
+
     if (this.#state.get() !== state) {
       return false;
     }
+
     this.#options.record({
       source: "destination",
       type: `destination ${state.state}`,
@@ -324,13 +370,16 @@ export class DestinationRuntime<TNative = unknown> {
       context: null,
     });
     this.#options.changed();
+
     return this.#state.get() === state;
   }
 
   #hold(entry: Entry) {
     this.#buffer.push({ ...entry, acceptedAt: this.#options.now() });
+
     if (this.#buffer.length > this.#options.buffer.maxReports) {
       const pushedOut = this.#buffer.shift();
+
       if (pushedOut !== undefined) {
         this.#settle(pushedOut, {
           status: "dropped",
@@ -338,6 +387,7 @@ export class DestinationRuntime<TNative = unknown> {
         });
       }
     }
+
     this.#options.record({
       source: "destination",
       type: "report buffered",
@@ -351,7 +401,9 @@ export class DestinationRuntime<TNative = unknown> {
 
   #drain(outcome: DestinationOutcome) {
     const waiting = this.#buffer.splice(0);
+
     this.#scheduleExpiry();
+
     for (const entry of waiting) {
       this.#settle(entry, outcome);
     }
@@ -365,18 +417,21 @@ export class DestinationRuntime<TNative = unknown> {
     }
 
     const oldest = this.#buffer[0];
+
     if (oldest === undefined) {
       return;
     }
 
     const { now, buffer } = this.#options;
     const delay = Math.max(0, oldest.acceptedAt + buffer.maxAgeMs - now());
+
     this.#expiry = setTimeout(this.#expire, delay);
     unrefTimer(this.#expiry);
   }
 
   #expire = () => {
     const { now, buffer } = this.#options;
+
     const outcome: DestinationOutcome =
       this.#state.get().state === "failed"
         ? { status: "skipped", reason: "start-failed" }
@@ -384,27 +439,33 @@ export class DestinationRuntime<TNative = unknown> {
 
     while (this.#buffer.length > 0) {
       const oldest = this.#buffer[0];
+
       if (oldest === undefined || now() - oldest.acceptedAt < buffer.maxAgeMs) {
         break;
       }
+
       this.#buffer.shift();
       this.#settle(oldest, outcome);
     }
+
     this.#scheduleExpiry();
     this.#options.changed();
   };
 
   #submit(session: ReporterSession<TNative>, entry: Entry) {
     const { deadlineMs, currentGeneration, submitDepth } = this.#options;
+
     if (entry.report.kind === "message" && !this.capabilities.messages) {
       this.#settle(entry, {
         status: "skipped",
         reason: "unsupported-report-kind",
       });
+
       return;
     }
 
     const controller = new AbortController();
+
     const flight: Flight = {
       entry,
       controller,
@@ -415,6 +476,7 @@ export class DestinationRuntime<TNative = unknown> {
         this.#land(flight, { status: "indeterminate", reason: "deadline" });
       }, deadlineMs),
     };
+
     unrefTimer(flight.timer);
     this.#flights.add(flight);
 
@@ -431,21 +493,26 @@ export class DestinationRuntime<TNative = unknown> {
     }
 
     let answer: ReturnType<ReporterSession["submit"]>;
+
     submitDepth.enter();
+
     try {
       answer = session.submit(entry.report, {
         signal: controller.signal,
         currentGeneration,
       });
+
       if (isPromiseLike(answer)) {
         Promise.resolve(answer).then(
           (result) => this.#land(flight, this.#toOutcome(result)),
           (error: unknown) => this.#land(flight, { status: "failed", error }),
         );
+
         return;
       }
     } catch (error) {
       this.#land(flight, { status: "failed", error });
+
       return;
     } finally {
       submitDepth.exit();
@@ -457,12 +524,14 @@ export class DestinationRuntime<TNative = unknown> {
   #toOutcome(result: unknown): DestinationOutcome {
     try {
       const parsed = parseSubmissionResult(result);
+
       if (parsed !== null) {
         return parsed;
       }
     } catch (error) {
       return { status: "failed", error };
     }
+
     return {
       status: "failed",
       error: new Error(
@@ -476,6 +545,7 @@ export class DestinationRuntime<TNative = unknown> {
     if (!this.#flights.delete(flight)) {
       return;
     }
+
     clearTimeout(flight.timer);
     this.#settle(flight.entry, outcome);
     flight.done.resolve();
@@ -500,6 +570,7 @@ export class DestinationRuntime<TNative = unknown> {
   #contain(type: string, task: () => unknown) {
     try {
       const result = task();
+
       if (result !== undefined) {
         Promise.resolve(result).catch(() => this.#recordFailure(type));
       }

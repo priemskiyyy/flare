@@ -30,6 +30,7 @@ const typed = new Flare({
   destinations: { sentry: createMockAdapter().adapter },
   schema: { tags: { area: schemaOf<"upload" | "editor">() } },
 });
+
 const untyped = new Flare({
   destinations: { sentry: createMockAdapter().adapter },
 });

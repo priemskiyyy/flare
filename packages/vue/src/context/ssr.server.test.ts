@@ -13,18 +13,23 @@ import {
 
 test("server rendering is inert: it reads idle, subscribes to nothing, opens nothing and reports nothing", async () => {
   expect(typeof window).toBe("undefined");
+
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
   const subscribe = vi.spyOn(flare.status, "subscribe");
+
   const destinationSubscribe = vi.spyOn(
     flare.destination("primary").status,
     "subscribe",
   );
+
   const Status = defineComponent(() => {
     const status = useFlareStatus();
     const primary = useDestinationStatus("primary");
+
     return () => h("span", `${status.value.state}/${primary.value.state}`);
   });
+
   const app = createSSRApp(() =>
     h(FlareProvider, { flare }, () =>
       h(FlareErrorBoundary, null, {
@@ -45,9 +50,12 @@ test("server rendering is inert: it reads idle, subscribes to nothing, opens not
 test("a Flare that was started on the server still renders idle, so the client can hydrate it", async () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
+
   const Status = defineComponent(() => {
     const status = useFlareStatus();
+
     return () => h("span", status.value.state);
   });
 
@@ -62,11 +70,15 @@ test("a Flare that was started on the server still renders idle, so the client c
 test("an error thrown while rendering on the server is reported through that Flare, and nothing is rendered in its place", async () => {
   const mock = createMockAdapter();
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   flare.start();
+
   const appErrorHandler = vi.fn();
+
   const Broken = defineComponent(() => () => {
     throw new Error("the server could not render this");
   });
+
   const app = createSSRApp(() =>
     h(FlareProvider, { flare }, () =>
       h(FlareErrorBoundary, null, {
@@ -75,6 +87,7 @@ test("an error thrown while rendering on the server is reported through that Fla
       }),
     ),
   );
+
   app.config.errorHandler = appErrorHandler;
 
   const html = await renderToString(app);

@@ -16,6 +16,7 @@ export const prepareReportPayload = (
 } => {
   if (source.kind === "exception") {
     const normalized = normalizeException(source.thrown, policy);
+
     return {
       payload: { kind: "exception", exception: normalized.exception },
       losses: normalized.losses,
@@ -34,10 +35,12 @@ export const prepareReportPayload = (
   }
 
   const { limits } = policy;
+
   const sanitized = sanitizeValue(source.text, "message", {
     ...policy,
     limits: { ...limits, stringLength: limits.messageLength },
   });
+
   return {
     payload: {
       kind: "message",

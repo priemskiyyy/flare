@@ -15,13 +15,17 @@ export const applyReportToEvent = (
 ): SentryEventLike => {
   const tags = { ...event.tags };
   const contexts = { ...event.contexts };
+
   for (const key of mirrored.tags) {
     delete tags[key];
   }
+
   for (const name of mirrored.contexts) {
     delete contexts[name];
   }
+
   const reportContexts = { ...contexts, ...report.contexts };
+
   if (report.kind === "exception" && report.exception.aggregated.length > 0) {
     // Sentry has no field for the errors of an AggregateError.
     reportContexts["flare.aggregated"] = {

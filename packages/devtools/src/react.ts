@@ -22,6 +22,7 @@ export const FlareDevtools = ({
   maxEvents = 200,
 }: FlareDevtoolsProps) => {
   const flare = useFlare();
+
   const [devtools] = useState(
     () => new Devtools({ flare, initialIsOpen, maxEvents }),
   );
@@ -40,6 +41,7 @@ export const FlareDevtools = ({
     }
 
     devtools.mount(element);
+
     return devtools.unmount;
   };
 

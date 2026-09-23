@@ -7,13 +7,16 @@ const randomHex = (length: number) =>
 // secret, so Math.random is enough for the fallback.
 const createFallbackId = () => {
   const variant = (8 + Math.floor(Math.random() * 4)).toString(16);
+
   return `${randomHex(8)}-${randomHex(4)}-4${randomHex(3)}-${variant}${randomHex(3)}-${randomHex(12)}`;
 };
 
 export const createReportId = () => {
   const source: { randomUUID?: () => string } | undefined = globalThis.crypto;
+
   if (source === undefined || typeof source.randomUUID !== "function") {
     return createFallbackId();
   }
+
   return source.randomUUID();
 };

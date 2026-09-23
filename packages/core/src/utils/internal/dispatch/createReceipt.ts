@@ -20,6 +20,7 @@ export const createReceipt = <TName extends string>(
 ) => {
   const unanswered: Partial<Record<TName, DestinationOutcome | null>> =
     Object.create(null);
+
   for (const name of names) {
     unanswered[name] = null;
   }
@@ -27,6 +28,7 @@ export const createReceipt = <TName extends string>(
   const status = new ValueStore<ReceiptStatus<TName>>(
     Object.freeze({ state: "pending", outcomes: Object.freeze(unanswered) }),
   );
+
   const completion = deferred<ReceiptStatus<TName>>();
 
   const finish = (final: ReceiptStatus<TName>) => {
@@ -46,10 +48,12 @@ export const createReceipt = <TName extends string>(
       if (status.get().state !== "pending") {
         return;
       }
+
       finish(Object.freeze({ state: "dropped", reason }));
     },
     settle: (name: TName, outcome: DestinationOutcome) => {
       const current = status.get();
+
       if (current.state !== "pending") {
         return;
       }
@@ -63,8 +67,10 @@ export const createReceipt = <TName extends string>(
         ...current.outcomes,
         [name]: Object.freeze(outcome),
       });
+
       if (hasAllOutcomes(outcomes)) {
         finish(Object.freeze({ state: "settled", outcomes }));
+
         return;
       }
 

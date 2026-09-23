@@ -43,12 +43,15 @@ const writeBreadcrumbs = (
 
   const own = report.breadcrumbs.map((entry) => {
     const breadcrumb = new Breadcrumb();
+
     breadcrumb.message = entry.name;
     breadcrumb.metadata = { ...entry.data };
     breadcrumb.type = "manual";
     breadcrumb.timestamp = new Date(entry.timestamp);
+
     return breadcrumb;
   });
+
   event.breadcrumbs = [...event.breadcrumbs, ...own].sort(
     (first, second) => first.timestamp.getTime() - second.timestamp.getTime(),
   );
@@ -71,6 +74,7 @@ export const applyReportToEvent = (
   }
 
   const { user } = report.identity;
+
   event.setUser(user?.id, user?.email, user?.name);
   // Bugsnag has three severities, so only fatal needs translation.
   event.severity = report.level === "fatal" ? "error" : report.level;
@@ -80,6 +84,7 @@ export const applyReportToEvent = (
   }
 
   event.clearMetadata(TAGS_SECTION);
+
   if (Object.keys(report.tags).length > 0) {
     event.addMetadata(TAGS_SECTION, { ...report.tags });
   }
@@ -88,6 +93,7 @@ export const applyReportToEvent = (
     if (RESERVED_SECTIONS.includes(name)) {
       continue;
     }
+
     replaceSection(event, name, context);
   }
 

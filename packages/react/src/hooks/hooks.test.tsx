@@ -17,9 +17,11 @@ afterEach(cleanup);
 const create = (options: Parameters<typeof createMockAdapter>[0] = {}) => {
   const mock = createMockAdapter(options);
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   const wrapper = ({ children }: PropsWithChildren) => (
     <FlareProvider flare={flare}>{children}</FlareProvider>
   );
+
   return { mock, flare, wrapper };
 };
 
@@ -27,14 +29,18 @@ const create = (options: Parameters<typeof createMockAdapter>[0] = {}) => {
 const watchSubscriptions = (observable: ObservableValue<unknown>) => {
   const live = { count: 0 };
   const subscribe = observable.subscribe;
+
   vi.spyOn(observable, "subscribe").mockImplementation((listener) => {
     live.count += 1;
+
     const stop = subscribe(listener);
+
     return () => {
       live.count -= 1;
       stop();
     };
   });
+
   return live;
 };
 
@@ -49,6 +55,7 @@ test("a hook used outside a provider fails with a message that names the provide
 test("useFlare returns the nearest provider's Flare", () => {
   const outer = create();
   const inner = create();
+
   const wrapper = ({ children }: PropsWithChildren) => (
     <FlareProvider flare={outer.flare}>
       <FlareProvider flare={inner.flare}>{children}</FlareProvider>
@@ -76,9 +83,11 @@ test("observing is passive: mounting the provider and every status hook opens no
 test("useFlareStatus follows the runtime and rerenders once per change", () => {
   const { flare, wrapper } = create();
   let renders = 0;
+
   const { result } = renderHook(
     () => {
       renders += 1;
+
       return useFlareStatus();
     },
     { wrapper },
@@ -102,6 +111,7 @@ test("useFlareStatus follows the runtime and rerenders once per change", () => {
 
 test("useDestinationStatus follows one destination from starting to ready, and to failed", async () => {
   const slow = create({ holdOpen: true });
+
   const { result } = renderHook(() => useDestinationStatus("primary"), {
     wrapper: slow.wrapper,
   });
@@ -120,14 +130,17 @@ test("useDestinationStatus follows one destination from starting to ready, and t
   expect(result.current).toEqual({ state: "ready" });
 
   const failure = new Error("init failed");
+
   const failing = create({
     onOpen: () => {
       throw failure;
     },
   });
+
   const failed = renderHook(() => useDestinationStatus("primary"), {
     wrapper: failing.wrapper,
   });
+
   act(() => failing.flare.start());
 
   expect(failed.result.current).toEqual({ state: "failed", error: failure });
@@ -137,6 +150,7 @@ test("a status callback is told about changes, with the latest callback and its 
   const { flare, wrapper } = create();
   const first = vi.fn();
   const second = vi.fn();
+
   const { rerender } = renderHook(({ onChange }) => useFlareStatus(onChange), {
     wrapper,
     initialProps: { onChange: first },
@@ -151,7 +165,9 @@ test("a status callback is told about changes, with the latest callback and its 
 
 test("unmounting the provider never starts, stops or disposes anything", () => {
   const { mock, flare, wrapper } = create();
+
   flare.start();
+
   const view = renderHook(
     () => [useFlareStatus(), useDestinationStatus("primary")],
     {
@@ -170,9 +186,11 @@ test("unmounting the provider never starts, stops or disposes anything", () => {
 test("hooks stop observing after unmount", () => {
   const { flare, wrapper } = create();
   const flareStatus = watchSubscriptions(flare.status);
+
   const destinationStatus = watchSubscriptions(
     flare.destination("primary").status,
   );
+
   const view = renderHook(
     () => [useFlareStatus(vi.fn()), useDestinationStatus("primary")],
     {
@@ -192,14 +210,18 @@ test("hooks stop observing after unmount", () => {
 test("Strict Mode and a remount leave no listener behind, open nothing and report nothing", () => {
   const { mock, flare } = create();
   const flareStatus = watchSubscriptions(flare.status);
+
   const destinationStatus = watchSubscriptions(
     flare.destination("primary").status,
   );
+
   const View = () => {
     const status = useFlareStatus();
     const destination = useDestinationStatus("primary");
+
     return <span>{`${status.state}/${destination.state}`}</span>;
   };
+
   const tree = (
     <StrictMode>
       <FlareProvider flare={flare}>
@@ -214,6 +236,7 @@ test("Strict Mode and a remount leave no listener behind, open nothing and repor
   expect(destinationStatus.count).toBe(1);
 
   first.unmount();
+
   const second = render(tree);
 
   expect(second.container.textContent).toBe("idle/idle");

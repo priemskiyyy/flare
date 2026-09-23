@@ -41,6 +41,7 @@ export class EventLog {
   subscribe = (listener: () => void) => {
     // Wrapped, so the same function subscribed twice is two subscriptions.
     const notify = () => listener();
+
     this.#listeners.add(notify);
 
     return () => {

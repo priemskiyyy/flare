@@ -42,9 +42,11 @@ export class SessionState {
     identity: string | null;
   }) => {
     const current = this.#state.get();
+
     if (identity !== this.#identity) {
       this.#identity = identity;
       this.#replace({ generation: current.generation + 1, user, ...EMPTY });
+
       return true;
     }
 
@@ -57,14 +59,17 @@ export class SessionState {
     }
 
     this.#replace({ ...current, user });
+
     return false;
   };
 
   setTag = (key: string, value: TagValue) => {
     const current = this.#state.get();
+
     if (Object.is(current.tags[key], value)) {
       return;
     }
+
     this.#replace({
       ...current,
       tags: Object.freeze({ ...current.tags, [key]: value }),
@@ -73,16 +78,20 @@ export class SessionState {
 
   removeTag = (key: string) => {
     const current = this.#state.get();
+
     if (!Object.hasOwn(current.tags, key)) {
       return;
     }
+
     const tags = { ...current.tags };
+
     delete tags[key];
     this.#replace({ ...current, tags: Object.freeze(tags) });
   };
 
   setContext = (name: string, context: Record<string, unknown>) => {
     const current = this.#state.get();
+
     this.#replace({
       ...current,
       contexts: Object.freeze({ ...current.contexts, [name]: context }),
@@ -91,10 +100,13 @@ export class SessionState {
 
   removeContext = (name: string) => {
     const current = this.#state.get();
+
     if (!Object.hasOwn(current.contexts, name)) {
       return;
     }
+
     const contexts = { ...current.contexts };
+
     delete contexts[name];
     this.#replace({ ...current, contexts: Object.freeze(contexts) });
   };
@@ -103,10 +115,13 @@ export class SessionState {
     if (this.#maxBreadcrumbs === 0) {
       return;
     }
+
     const current = this.#state.get();
+
     const breadcrumbs = [...current.breadcrumbs, breadcrumb].slice(
       -this.#maxBreadcrumbs,
     );
+
     this.#replace({ ...current, breadcrumbs: Object.freeze(breadcrumbs) });
   };
 

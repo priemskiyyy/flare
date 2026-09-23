@@ -30,6 +30,7 @@ test("an explicit key is a duplicate the second time, for the same destination",
 
 test("an explicit key does not outlive the identity it was seen under", () => {
   const dedupe = index();
+
   seen(dedupe, { key: "checkout-failed", generation: 1 });
 
   expect(seen(dedupe, { key: "checkout-failed", generation: 2 })).toBe(false);
@@ -37,6 +38,7 @@ test("an explicit key does not outlive the identity it was seen under", () => {
 
 test("the oldest explicit keys are forgotten once the index is full", () => {
   const dedupe = index({ maxKeys: 2 });
+
   seen(dedupe, { key: "a" });
   seen(dedupe, { key: "b" });
   seen(dedupe, { key: "c" });
@@ -57,6 +59,7 @@ test("the same Error object is a duplicate only within the window", () => {
 test("the same Error object routed to another destination is not a duplicate there", () => {
   const dedupe = index();
   const error = new Error("boom");
+
   seen(dedupe, { thrown: error });
 
   expect(seen(dedupe, { thrown: error, destination: "backend" })).toBe(false);
@@ -74,6 +77,7 @@ test("equal but distinct errors, and equal primitives, are separate occurrences"
 test("a zero window turns object identity dedupe off", () => {
   const dedupe = index({ windowMs: 0 });
   const error = new Error("boom");
+
   seen(dedupe, { thrown: error });
 
   expect(seen(dedupe, { thrown: error })).toBe(false);
@@ -82,6 +86,7 @@ test("a zero window turns object identity dedupe off", () => {
 test("the same Error is a new occurrence after an account switch", () => {
   const dedupe = index();
   const error = new Error("shared failure");
+
   seen(dedupe, { thrown: error, generation: 1 });
 
   expect(seen(dedupe, { thrown: error, generation: 2 })).toBe(false);
@@ -89,6 +94,7 @@ test("the same Error is a new occurrence after an account switch", () => {
 
 test("destination names and explicit keys cannot collide through separators", () => {
   const dedupe = index();
+
   seen(dedupe, { destination: "backend:eu", key: "checkout" });
 
   expect(seen(dedupe, { destination: "backend", key: "eu:checkout" })).toBe(
@@ -98,6 +104,7 @@ test("destination names and explicit keys cannot collide through separators", ()
 
 test("one destination cannot evict another destination's explicit keys", () => {
   const dedupe = index({ maxKeys: 1 });
+
   seen(dedupe, { destination: "sentry", key: "checkout" });
   seen(dedupe, { destination: "backend", key: "upload" });
 

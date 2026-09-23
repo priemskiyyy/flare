@@ -15,9 +15,11 @@ test("the initial state opens only when asked and never moves focus on mount", (
 
 test("opening and closing move focus and remember when the panel closed", () => {
   const opened = devtoolsReducer(initialDevtoolsState(false), { type: "OPEN" });
+
   expect(opened.panel).toEqual({ status: "OPEN", autoFocus: true });
 
   const closed = devtoolsReducer(opened, { type: "CLOSE", at: 42 });
+
   expect(closed.panel).toEqual({
     status: "CLOSED",
     autoFocus: true,
@@ -29,6 +31,7 @@ test("pausing toggles and leaves the panel alone", () => {
   const paused = devtoolsReducer(initialDevtoolsState(true), {
     type: "TOGGLE_PAUSE",
   });
+
   expect(paused).toEqual({
     panel: { status: "OPEN", autoFocus: false },
     isPaused: true,

@@ -53,6 +53,7 @@ test("an Error from another realm is recognized by shape, not by instanceof", ()
 test("an error-like object's name and message are read once", () => {
   const name = vi.fn(() => "RemoteError");
   const message = vi.fn(() => "Request failed");
+
   const error = Object.defineProperties(
     {},
     {
@@ -121,6 +122,7 @@ test("a thrown plain object is described by its keys and never by its values", (
 
 test("a circular object is described without recursing into it", () => {
   const circular: Record<string, unknown> = { code: 1 };
+
   circular.self = circular;
 
   expect(normalize(circular).exception.message).toBe(
@@ -140,6 +142,7 @@ test("a thrown function is named, not called", () => {
 
 test("a getter that throws costs only the field it guards", () => {
   const error = new UploadError("unused");
+
   Object.defineProperty(error, "message", {
     get: () => {
       throw new Error("getter exploded");
@@ -206,6 +209,7 @@ test("custom aggregate array methods cannot bypass normalization", () => {
 
 test("a message that is not a string is dropped rather than coerced", () => {
   const error = new Error("unused");
+
   Object.defineProperty(error, "message", {
     value: { toString: () => "coerced" },
   });
@@ -217,6 +221,7 @@ test("an engine that fails while formatting the stack costs only the stack", () 
   // V8 formats `stack` lazily on first read and coerces `message` itself while
   // doing so. Flare cannot prevent that read, only contain it.
   const error = new Error("unused");
+
   Object.defineProperty(error, "message", {
     value: {
       toString: () => {
@@ -235,6 +240,7 @@ test("an engine that fails while formatting the stack costs only the stack", () 
 test("arbitrary properties of an Error are never read", () => {
   const secret = vi.fn(() => "token");
   const error = new Error("with extras");
+
   Object.defineProperty(error, "secret", { get: secret, enumerable: true });
 
   normalize(error);
@@ -264,6 +270,7 @@ test("a cause that is not an Error is kept as a NonError", () => {
 test("a circular cause chain ends where it would repeat", () => {
   const first = new Error("first");
   const second = new Error("second", { cause: first });
+
   first.cause = second;
 
   expect(
@@ -273,6 +280,7 @@ test("a circular cause chain ends where it would repeat", () => {
 
 test("a cause chain deeper than the limit is cut and the cut is recorded", () => {
   const deepest = new Error("level 3");
+
   const chain = new Error("level 0", {
     cause: new Error("level 1", {
       cause: new Error("level 2", { cause: deepest }),
@@ -311,6 +319,7 @@ test("an AggregateError keeps its first errors up to the limit", () => {
 
 test("an oversized message and stack are cut to their limits and recorded", () => {
   const error = new Error("m".repeat(50));
+
   error.stack = "s".repeat(80);
 
   const { exception, losses } = normalize(error, {
@@ -328,12 +337,17 @@ test("an oversized message and stack are cut to their limits and recorded", () =
 
 test("losses retain field order across the root error, causes and aggregate members", () => {
   const cause = new Error("cause", { cause: new Error("omitted") });
+
   delete cause.stack;
+
   const member = new Error("member");
+
   member.stack = "trace";
+
   const error = new AggregateError([member, new Error("omitted")], "outer", {
     cause,
   });
+
   error.name = "N".repeat(201);
   error.stack = "trace";
 
@@ -359,6 +373,7 @@ test("losses retain field order across the root error, causes and aggregate memb
 
 test("an Error without a usable name falls back to Error", () => {
   const error = new Error("nameless");
+
   Object.defineProperty(error, "name", { value: "" });
 
   expect(normalize(error).exception.name).toBe("Error");
@@ -375,8 +390,10 @@ test("the scrubber rewrites exception text before it is cut", () => {
 
 test("the scrubber sees the message and stack of the error and of each cause", () => {
   const seen: string[] = [];
+
   const scrub = (text: string, path: string) => {
     seen.push(path);
+
     return text;
   };
 

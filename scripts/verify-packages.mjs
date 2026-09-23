@@ -19,6 +19,7 @@ const workspace = fileURLToPath(new URL("..", import.meta.url));
 const artifacts = path.join(workspace, ".artifacts");
 const release = path.join(artifacts, "release");
 const consumer = mkdtempSync(path.join(tmpdir(), "flare-consumer-"));
+
 const rootPackage = JSON.parse(
   readFileSync(path.join(workspace, "package.json"), "utf8"),
 );
@@ -42,6 +43,7 @@ const run = (command, args, cwd = consumer) => {
 
 const write = (name, content) =>
   writeFileSync(path.join(consumer, name), content);
+
 const json = (name, value) =>
   write(name, `${JSON.stringify(value, null, 2)}\n`);
 
@@ -50,9 +52,11 @@ const json = (name, value) =>
 const stageRelease = (name, tarball) => {
   const directory = path.join(release, name);
   const filename = path.basename(tarball);
+
   const checksum = createHash("sha256")
     .update(readFileSync(tarball))
     .digest("hex");
+
   mkdirSync(directory, { recursive: true });
   copyFileSync(tarball, path.join(directory, filename));
   writeFileSync(
@@ -103,6 +107,7 @@ const importsFrom = (bundle, prefix) =>
 try {
   rmSync(release, { recursive: true, force: true });
   mkdirSync(artifacts, { recursive: true });
+
   const tarballs = ["packages", "packages/adapters"].flatMap((group) =>
     readdirSync(path.join(workspace, group))
       .filter((directory) =>
@@ -110,9 +115,11 @@ try {
       )
       .map((directory) => {
         const packageDirectory = path.join(workspace, group, directory);
+
         process.stdout.write(
           run("pnpm", ["exec", "publint", packageDirectory], workspace),
         );
+
         const [packed] = JSON.parse(
           run(
             "npm",
@@ -126,6 +133,7 @@ try {
             packageDirectory,
           ),
         );
+
         assert(packed.files.some((file) => file.path === "README.md"));
         assert(packed.files.some((file) => file.path === "LICENSE"));
         assert(!packed.files.some((file) => file.path.startsWith("src/")));
@@ -134,11 +142,13 @@ try {
             /\.(test|fixture|contracts)\./.test(file.path),
           ),
         );
+
         // pnpm rewrites `workspace:*` only when it publishes. A tarball that
         // still carries it cannot be installed by anyone.
         const manifest = JSON.parse(
           readFileSync(path.join(packageDirectory, "package.json"), "utf8"),
         );
+
         for (const field of ["dependencies", "peerDependencies"]) {
           for (const [name, range] of Object.entries(manifest[field] ?? {})) {
             assert(
@@ -147,8 +157,11 @@ try {
             );
           }
         }
+
         const tarball = path.join(artifacts, packed.filename);
+
         stageRelease(packed.name, tarball);
+
         return tarball;
       }),
   );
@@ -183,6 +196,7 @@ try {
 
   for (const { file, client = false, sdk } of bundles) {
     const bundle = read(file);
+
     assert(!bundle.includes('from "src/'), `${file} kept a src alias import.`);
     assert.equal(
       bundle.startsWith('"use client";'),
@@ -191,6 +205,7 @@ try {
     );
     // Default exports break silently under some React Native interop.
     assert(!/^export default /m.test(bundle), `${file} has a default export.`);
+
     if (sdk !== undefined) {
       assert(!importsFrom(bundle, sdk), `${file} imports a provider SDK.`);
     }
@@ -223,6 +238,7 @@ try {
       `${dependent} installed its own copy of the core.`,
     );
   }
+
   for (const wrapper of ["react", "vue", "solid", "svelte"]) {
     assert(
       !read(`@priemskiyyy/flare-devtools/dist/${wrapper}.js`).includes(
@@ -231,6 +247,7 @@ try {
       `The devtools ${wrapper} wrapper bundled a second inspector.`,
     );
   }
+
   // The inspector carries its own Solid runtime, so a host needs none.
   assert(
     !importsFrom(read("@priemskiyyy/flare-devtools/dist/index.js"), "solid-js"),
@@ -238,6 +255,7 @@ try {
   );
 
   const declarations = read("@priemskiyyy/flare/dist/index.d.ts");
+
   assert(
     declarations.includes("@example"),
     "Declarations lost their examples.",

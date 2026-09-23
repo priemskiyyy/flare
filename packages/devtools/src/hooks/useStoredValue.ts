@@ -23,6 +23,7 @@ export const useStoredValue = <TValue>(
       return fallback;
     }
   };
+
   const [value, setValue] = createSignal(read());
 
   const handleStorage = (event: StorageEvent) => {

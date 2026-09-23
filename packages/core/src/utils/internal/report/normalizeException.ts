@@ -6,6 +6,7 @@ import { sanitizeString } from "src/utils/internal/privacy/sanitizeString";
 
 type Origin = NormalizedException["origin"];
 type Described = { origin: Origin; error: NormalizedError };
+
 const NON_ERROR_NAME = "NonError";
 const FALLBACK_ERROR_NAME = "Error";
 const NAME_LENGTH = 200;
@@ -25,9 +26,11 @@ const readProperty = (value: object, key: string): unknown => {
 // Only strings are kept. Coercing anything else would run its `toString`.
 const readString = (value: object, key: string) => {
   const read = readProperty(value, key);
+
   if (typeof read !== "string") {
     return null;
   }
+
   return read;
 };
 
@@ -72,9 +75,11 @@ const describeNonError = (origin: Origin, message: string): Described => ({
 // Keys say what was thrown without carrying any of its values into the message.
 const describeObject = (value: object): Described => {
   const keys = readKeys(value);
+
   if (keys.length === 0) {
     return describeNonError("object", "Object thrown");
   }
+
   return describeNonError(
     "object",
     `Object thrown with keys: ${keys.join(", ")}`,
@@ -96,15 +101,18 @@ const describeThrown = (thrown: unknown): Described => {
 
   const origin = getErrorOrigin(thrown);
   const name = readString(thrown, "name");
+
   // An Error from another realm fails `instanceof` but keeps its shape.
   if (origin === null && name === null) {
     return describeObject(thrown);
   }
 
   const message = readString(thrown, "message");
+
   if (origin === null && message === null) {
     return describeObject(thrown);
   }
+
   return {
     origin: origin ?? "error-like",
     error: {
@@ -125,12 +133,14 @@ const collectCauses = (
 
   while (isObject(current)) {
     const cause = readProperty(current, "cause");
+
     if (cause === undefined || seen.has(cause)) {
       return causes;
     }
 
     if (causes.length === limit) {
       losses.push({ path: "exception.causes", reason: "truncated" });
+
       return causes;
     }
 
@@ -151,17 +161,21 @@ const collectAggregated = (
   }
 
   const errors = readProperty(thrown, "errors");
+
   if (!Array.isArray(errors)) {
     return [];
   }
 
   const length = readProperty(errors, "length");
+
   if (typeof length !== "number") {
     return [];
   }
+
   if (length > limit) {
     losses.push({ path: "exception.aggregated", reason: "truncated" });
   }
+
   // Own the array: custom slice or species hooks must not bypass normalization.
   return Array.from({ length: Math.min(length, limit) }, (_, index) =>
     readProperty(errors, String(index)),
@@ -180,6 +194,7 @@ export const normalizeException = (
 ): { exception: NormalizedException; losses: MappingLoss[] } => {
   const { limits } = policy;
   const losses: MappingLoss[] = [];
+
   const boundError = (error: NormalizedError, path: string): NormalizedError =>
     Object.freeze({
       name: sanitizeString(error.name, {
@@ -207,12 +222,14 @@ export const normalizeException = (
 
   const described = describeThrown(thrown);
   const error = boundError(described.error, "exception");
+
   const causes = collectCauses(thrown, {
     limit: limits.causeDepth,
     losses,
   }).map((cause, index) =>
     boundError(describeThrown(cause).error, `exception.causes.${index}`),
   );
+
   const aggregated = collectAggregated(thrown, {
     limit: limits.aggregatedErrors,
     losses,

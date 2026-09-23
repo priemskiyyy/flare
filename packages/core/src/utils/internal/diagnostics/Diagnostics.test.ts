@@ -15,6 +15,7 @@ const create = () => {
   const read = vi.fn(() => snapshotOf(read.mock.calls.length));
   const now = vi.fn(() => 42);
   const diagnostics = new Diagnostics({ read, now });
+
   return { diagnostics, read, now };
 };
 
@@ -44,6 +45,7 @@ test("the snapshot is read lazily and kept until something changes", () => {
 test("several changes in one turn notify observers once", async () => {
   const { diagnostics } = create();
   const listener = vi.fn();
+
   diagnostics.api.subscribe(listener);
 
   diagnostics.changed();
@@ -65,6 +67,7 @@ test("an event is assembled only while someone listens", () => {
   expect(now).not.toHaveBeenCalled();
 
   const stop = diagnostics.api.events.subscribe(listener);
+
   diagnostics.record(event);
   stop();
   diagnostics.record(event);
@@ -75,8 +78,10 @@ test("an event is assembled only while someone listens", () => {
 
 test("a listener that throws does not stop the others", () => {
   vi.spyOn(globalThis, "queueMicrotask").mockImplementation(() => {});
+
   const { diagnostics } = create();
   const second = vi.fn();
+
   diagnostics.api.events.subscribe(() => {
     throw new Error("listener failed");
   });
@@ -91,6 +96,7 @@ test("disposal sends one last event and notification, then goes quiet with a sta
   const { diagnostics } = create();
   const listener = vi.fn();
   const events = vi.fn();
+
   diagnostics.api.subscribe(listener);
   diagnostics.api.events.subscribe(events);
 

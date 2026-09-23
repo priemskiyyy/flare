@@ -89,19 +89,23 @@ test("a key that looks like a secret is redacted, whatever put it there", () => 
 
 test("bounds depth, breadth and repeated references without running getters", () => {
   let ran = false;
+
   const deep = Array.from({ length: 10 }).reduce<unknown>(
     (next) => ({ next }),
     {},
   );
+
   const wide = Object.fromEntries(
     Array.from({ length: 60 }, (_, index) => [`key${index}`, index]),
   );
+
   const context = {
     deep,
     wide,
     twice: [wide, wide],
     get trap() {
       ran = true;
+
       return "boom";
     },
   };
@@ -156,9 +160,11 @@ test("whatever did not verifiably arrive is an error", () => {
   expect(kind("destination outcome", { status: "submitted" })).toBe(
     "DESTINATION",
   );
+
   for (const status of ["failed", "indeterminate", "dropped", "skipped"]) {
     expect(kind("destination outcome", { status })).toBe("ERROR");
   }
+
   expect(kind("destination outcome", null)).toBe("ERROR");
   expect(kind("report dropped", { reason: "route-failed" }, "report")).toBe(
     "ERROR",

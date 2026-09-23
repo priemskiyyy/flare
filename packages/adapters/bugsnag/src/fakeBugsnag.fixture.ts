@@ -56,7 +56,9 @@ export const fakeBugsnag = ({ started = true }: { started?: boolean } = {}) => {
     metadata: Record<string, Record<string, unknown>>;
     breadcrumbs: FakeBreadcrumb[];
   } = { user: {}, metadata: {}, breadcrumbs: [] };
+
   const events: FakeEvent[] = [];
+
   const state: {
     started: boolean;
     /** What delivery answers: `null` for delivered or enqueued, an error for a failure. */
@@ -74,6 +76,7 @@ export const fakeBugsnag = ({ started = true }: { started?: boolean } = {}) => {
     hold: false,
     holdBeforeOnError: false,
   };
+
   const held: Array<() => void> = [];
   const calls = { start: 0 };
 
@@ -101,36 +104,49 @@ export const fakeBugsnag = ({ started = true }: { started?: boolean } = {}) => {
           delete event.metadata[section];
         },
       };
+
       const finish = () => {
         // A discarded event still calls back without an error, exactly like delivery does.
         if (!state.applicationKeepsEvents) {
           postReport?.(null, event);
+
           return;
         }
+
         events.push(event);
         postReport?.(state.deliveryError, event);
       };
+
       const process = () => {
         let keep: boolean | void = undefined;
+
         try {
           keep = onError?.(event);
         } catch {
           // The real SDK logs callback failures and continues sending.
         }
+
         if (keep === false) {
           postReport?.(null, event);
+
           return;
         }
+
         if (state.hold) {
           held.push(finish);
+
           return;
         }
+
         finish();
       };
+
       if (state.holdBeforeOnError) {
         held.push(process);
+
         return;
       }
+
       process();
     },
     setUser: (id?: string, email?: string, name?: string) => {
@@ -142,8 +158,10 @@ export const fakeBugsnag = ({ started = true }: { started?: boolean } = {}) => {
     clearMetadata: (section: string, key?: string) => {
       if (key === undefined) {
         delete client.metadata[section];
+
         return;
       }
+
       delete client.metadata[section]?.[key];
     },
     leaveBreadcrumb: (
@@ -151,6 +169,7 @@ export const fakeBugsnag = ({ started = true }: { started?: boolean } = {}) => {
       metadata: Record<string, unknown> = {},
     ) => {
       const breadcrumb = new FakeBreadcrumb();
+
       breadcrumb.message = message;
       breadcrumb.metadata = metadata;
       breadcrumb.timestamp = new Date();

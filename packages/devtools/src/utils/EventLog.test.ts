@@ -18,6 +18,7 @@ const event = (
 test("keeps the newest events first within a clamped limit and notifies once per microtask", async () => {
   const log = new EventLog(0);
   let notifications = 0;
+
   log.subscribe(() => {
     notifications += 1;
   });
@@ -44,6 +45,7 @@ test("keeps the newest events first within a clamped limit and notifies once per
 
 test("a limit that is not a number falls back instead of throwing into the host", () => {
   const log = new EventLog(Number.NaN);
+
   for (let index = 0; index < 250; index += 1) {
     log.add(event("destination submit"));
   }
@@ -53,6 +55,7 @@ test("a limit that is not a number falls back instead of throwing into the host"
 
 test("records the description alongside the event", () => {
   const log = new EventLog(10);
+
   log.add(
     event("destination outcome", {
       status: "dropped",
@@ -62,6 +65,7 @@ test("records the description alongside the event", () => {
   );
 
   const [recorded] = log.get();
+
   expect(recorded?.kind).toBe("ERROR");
   expect(recorded?.summary).toBe("dropped · deduped");
   expect(recorded?.context).toContain('"reason": "deduped"');
@@ -70,7 +74,9 @@ test("records the description alongside the event", () => {
 test("an observer removed by an earlier one during a notification is not called", async () => {
   const log = new EventLog(10);
   const calls: string[] = [];
+
   let stopSecond = () => {};
+
   log.subscribe(() => {
     calls.push("first");
     stopSecond();

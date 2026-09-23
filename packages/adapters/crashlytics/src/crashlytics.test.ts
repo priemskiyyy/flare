@@ -8,6 +8,7 @@ const create = (fake = fakeCrashlytics()) => {
   const flare = new Flare({
     destinations: { crashlytics: crashlytics({ sdk: fake.sdk }) },
   });
+
   return { fake, flare };
 };
 
@@ -29,7 +30,9 @@ test("creating the adapter calls nothing on the SDK, not even getCrashlytics", (
 
 test("an exception is recorded as an Error rebuilt from the sanitized report, with its causes", async () => {
   const { fake, flare } = create();
+
   flare.start();
+
   const thrown = new TypeError("upload failed", {
     cause: new Error("disk full"),
   });
@@ -58,6 +61,7 @@ test("an exception is recorded as an Error rebuilt from the sanitized report, wi
 
 test("recordError takes no metadata, so everything event-local is recorded as a loss and never faked through globals", async () => {
   const { fake, flare } = create();
+
   flare.start();
   flare.user({ id: "ada" });
   flare.breadcrumb("uploadStarted", { kind: "avatar" });
@@ -93,6 +97,7 @@ test("recordError takes no metadata, so everything event-local is recorded as a 
 
 test("a message is skipped, because Crashlytics records errors and nothing else", async () => {
   const { fake, flare } = create();
+
   flare.start();
 
   await expect(
@@ -108,6 +113,7 @@ test("a message is skipped, because Crashlytics records errors and nothing else"
 
 test("a recordError that throws is a failed outcome and never reaches the application", async () => {
   const { fake, flare } = create();
+
   flare.start();
   fake.state.recordFailure = new Error("native module missing");
 
@@ -139,6 +145,7 @@ test("the capabilities say how little Crashlytics can do per report", () => {
 
 test("there is no flush: sendUnsentReports acknowledges nothing", async () => {
   const { flare } = create();
+
   flare.start();
 
   await expect(flare.flush()).resolves.toEqual({

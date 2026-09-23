@@ -14,6 +14,7 @@ afterEach(() => {
 const create = () => {
   const mock = createMockAdapter({ name: "mocked" });
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   return { mock, flare };
 };
 
@@ -22,7 +23,9 @@ test("the Svelte attachment mounts the inspector for the provider's Flare, follo
   const second = create();
   const subscribe = vi.spyOn(second.flare.diagnostics, "subscribe");
   const view = render(Fixture, { flare: first.flare });
+
   await tick();
+
   const host = view.container.querySelector("div div");
 
   expect(host?.shadowRoot?.textContent).toContain("All destinations");

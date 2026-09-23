@@ -125,6 +125,7 @@ test("getters and toJSON are never run", () => {
   const getter = vi.fn(() => "computed");
   const toJSON = vi.fn(() => "serialized");
   const input = { toJSON };
+
   Object.defineProperty(input, "computed", { get: getter, enumerable: true });
 
   const { value } = sanitizeValue(input, "contexts.live", policy());
@@ -138,6 +139,7 @@ test("array accessors and custom slice methods are never run", () => {
   const getter = vi.fn(() => "computed");
   const slice = vi.fn(() => ["substituted"]);
   const input = ["first"];
+
   Object.defineProperty(input, "1", { get: getter, enumerable: true });
   Object.defineProperty(input, "slice", { value: slice });
 
@@ -152,6 +154,7 @@ test("array accessors and custom slice methods are never run", () => {
 test("array holes do not inherit values from the prototype", () => {
   const input = new Array(1);
   const prototype = Object.create(Array.prototype);
+
   Object.defineProperty(prototype, "0", { value: "inherited" });
   Object.setPrototypeOf(input, prototype);
 
@@ -161,6 +164,7 @@ test("array holes do not inherit values from the prototype", () => {
 test("date formatting never calls an application's override", () => {
   const input = new Date("2026-09-20T10:00:00.000Z");
   const format = vi.fn(() => "unfiltered application data");
+
   input.toISOString = format;
 
   expect(sanitizeValue(input, "c", policy()).value).toBe(
@@ -181,6 +185,7 @@ test("prototype-named keys remain own data properties", () => {
 
 test("a circular reference is marked where it would repeat", () => {
   const input: Record<string, unknown> = { name: "root" };
+
   input.self = input;
 
   expect(sanitizeValue(input, "c", policy()).value).toEqual({
@@ -227,6 +232,7 @@ test("object truncation stops inspecting properties after detecting an omitted k
         if (key === "ignored") {
           throw new Error("An omitted property must not be inspected.");
         }
+
         return Reflect.getOwnPropertyDescriptor(target, key);
       },
     },
@@ -240,6 +246,7 @@ test("object truncation stops inspecting properties after detecting an omitted k
 
 test("object sanitization does not inspect symbol properties it cannot retain", () => {
   const hidden = Symbol("hidden");
+
   const input = new Proxy(
     { visible: 1, [hidden]: 2 },
     {
@@ -247,6 +254,7 @@ test("object sanitization does not inspect symbol properties it cannot retain", 
         if (key === hidden) {
           throw new Error("A symbol property must not be inspected.");
         }
+
         return Reflect.getOwnPropertyDescriptor(target, key);
       },
     },
@@ -296,6 +304,7 @@ test("retained object values are snapshotted before a scrubber changes the input
       policy({
         scrub: (text) => {
           input.second = "changed";
+
           return text;
         },
       }),
@@ -320,6 +329,7 @@ test("array truncation never inspects elements beyond the retained prefix", () =
       if (key === "2" || key === "3") {
         throw new Error("An omitted element must not be inspected.");
       }
+
       return Reflect.getOwnPropertyDescriptor(target, key);
     },
   });
@@ -336,6 +346,7 @@ test("array sanitization ignores unrelated properties that cannot be inspected",
       if (key === "unrelated") {
         throw new Error("An unrelated property must not be inspected.");
       }
+
       return Reflect.getOwnPropertyDescriptor(target, key);
     },
   });
@@ -354,6 +365,7 @@ test.each(["length", "0"])(
         if (key === unreadable) {
           throw new Error("The array cannot be inspected.");
         }
+
         return Reflect.getOwnPropertyDescriptor(target, key);
       },
     });

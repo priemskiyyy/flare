@@ -19,6 +19,7 @@ const macrotask = () => new Promise((resolve) => setTimeout(resolve, 0));
 const create = (options: Parameters<typeof createMockAdapter>[0] = {}) => {
   const mock = createMockAdapter({ name: "mocked", ...options });
   const flare = new Flare({ destinations: { primary: mock.adapter } });
+
   return { mock, flare };
 };
 
@@ -27,7 +28,9 @@ const mountDevtools = (
 ) => {
   const host = document.body.appendChild(document.createElement("div"));
   const devtools = new FlareDevtools(options);
+
   devtools.mount(host);
+
   // Queries need an element; the shadow root's only child is the application root.
   const view = () => {
     const root = host.shadowRoot?.firstElementChild;
@@ -38,13 +41,17 @@ const mountDevtools = (
 
     return within(root);
   };
+
   const text = () => host.shadowRoot?.textContent ?? "";
+
   const panel = () =>
     view().getByRole("complementary", { name: "Flare devtools" });
+
   const rows = () =>
     Array.from(
       view().getByLabelText("Event timeline").querySelectorAll("details"),
     );
+
   const types = () =>
     rows().map((row) => row.querySelector(".event-type")?.textContent);
 
@@ -53,6 +60,7 @@ const mountDevtools = (
 
 test("the panel observes a Flare without starting it or creating a report", async () => {
   const { mock, flare } = create();
+
   flare.user({ id: "ada" });
   flare.breadcrumb("opened");
   flare.capture(new Error("buffered before start"));
@@ -61,6 +69,7 @@ test("the panel observes a Flare without starting it or creating a report", asyn
     flare,
     initialIsOpen: true,
   });
+
   await macrotask();
 
   expect(mock.openings).toEqual([]);
@@ -70,15 +79,18 @@ test("the panel observes a Flare without starting it or creating a report", asyn
   expect(panel().querySelector(".counters")?.textContent).toBe(
     "identity #1 · 1 breadcrumb · 1 pending",
   );
+
   const destination = within(
     view().getByRole("navigation", { name: "Flare destinations" }),
   ).getByRole("button", { name: /primary/ });
+
   expect(destination.textContent).toContain("mocked · idle · 1 buffered");
   devtools.unmount();
 });
 
 test("the panel follows the Flare as it changes, and never shows report content", async () => {
   const { flare } = create();
+
   const { devtools, view, text, panel, types } = mountDevtools({
     flare,
     initialIsOpen: true,
@@ -109,26 +121,32 @@ test("the panel follows the Flare as it changes, and never shows report content"
 
 test("selecting a destination shows what it declared and narrows the timeline to it", async () => {
   const first = createMockAdapter({ name: "mocked", flush: true });
+
   const second = createMockAdapter({
     name: "other",
     capabilities: { messages: false },
   });
+
   const flare = new Flare({
     destinations: { primary: first.adapter, backup: second.adapter },
   });
+
   const { devtools, view, rows } = mountDevtools({
     flare,
     initialIsOpen: true,
   });
+
   flare.start();
   flare.capture(new Error("to both"));
   await macrotask();
+
   const everything = rows().length;
 
   fireEvent.click(view().getByRole("button", { name: /backup/ }));
   await macrotask();
 
   const detail = view().getByRole("region", { name: "backup destination" });
+
   expect(
     within(detail).getByText("messages").nextElementSibling?.textContent,
   ).toBe("no");
@@ -163,17 +181,21 @@ test("what did not arrive is an error: it fills the error chip, matches the sear
       throw new Error("the provider is down");
     },
   });
+
   const { devtools, view, host, panel, rows } = mountDevtools({
     flare,
     initialIsOpen: true,
   });
+
   flare.start();
   // The snapshot is announced once per microtask.
   await macrotask();
 
   fireEvent.keyDown(panel(), { key: "Escape" });
+
   const launcher = () =>
     view().getByRole("button", { name: "Open Flare devtools" });
+
   expect(launcher().querySelector(".dot")?.getAttribute("data-state")).toBe(
     "started",
   );
@@ -190,6 +212,7 @@ test("what did not arrive is an error: it fills the error chip, matches the sear
   expect(host.shadowRoot?.activeElement).toBe(panel());
 
   const kinds = view().getByRole("group", { name: "Event kinds" });
+
   fireEvent.click(within(kinds).getByRole("button", { name: "Errors 1" }));
   expect(rows()).toHaveLength(1);
   expect(rows()[0]?.textContent).toContain("destination outcome");
@@ -216,6 +239,7 @@ test("what did not arrive is an error: it fills the error chip, matches the sear
 test("a report that arrived does not light the launcher", async () => {
   const { flare } = create();
   const { devtools, view } = mountDevtools({ flare });
+
   flare.start();
   await macrotask();
 
@@ -233,11 +257,13 @@ test("a report that arrived does not light the launcher", async () => {
 
 test("pausing stops recording, resuming continues it, clearing forgets everything, and none of it touches the Flare", async () => {
   const { mock, flare } = create();
+
   const { devtools, view, text, rows } = mountDevtools({
     flare,
     initialIsOpen: true,
     maxEvents: 3,
   });
+
   flare.start();
   await macrotask();
 
@@ -284,10 +310,14 @@ test("the launcher opens the panel, the panel resizes and docks, Escape closes i
   fireEvent.click(
     first.view().getByRole("button", { name: "Open Flare devtools" }),
   );
+
   const panel = first.panel();
+
   expect(first.host.shadowRoot?.activeElement).toBe(panel);
+
   const handle = () =>
     first.view().getByRole("separator", { name: "Resize devtools" });
+
   fireEvent.keyDown(handle(), { key: "ArrowUp" });
   expect(panel.style.height).toBe("444px");
   fireEvent.click(
@@ -301,9 +331,11 @@ test("the launcher opens the panel, the panel resizes and docks, Escape closes i
   );
   expect(panel.style.height).toBe("444px");
   fireEvent.keyDown(panel, { key: "Escape" });
+
   const launcher = first
     .view()
     .getByRole("button", { name: "Open Flare devtools" });
+
   expect(first.host.shadowRoot?.activeElement).toBe(launcher);
   expect(JSON.parse(localStorage.getItem(PREFERENCES_KEY) ?? "")).toEqual({
     isOpen: false,
@@ -315,6 +347,7 @@ test("the launcher opens the panel, the panel resizes and docks, Escape closes i
 
   // The remembered state wins over the option, and restoring never steals focus.
   const second = mountDevtools({ flare, initialIsOpen: true });
+
   expect(
     second.view().getByRole("button", { name: "Open Flare devtools" }),
   ).toBeTruthy();
@@ -325,12 +358,15 @@ test("the launcher opens the panel, the panel resizes and docks, Escape closes i
 test("setFlare follows another Flare, history survives a remount, and mounting twice throws", async () => {
   const original = create();
   const replacement = create();
+
   const { devtools, host, rows, types } = mountDevtools({
     flare: original.flare,
     initialIsOpen: true,
   });
+
   original.flare.start();
   await macrotask();
+
   const recorded = rows().length;
 
   expect(() => devtools.mount(host)).toThrow(
@@ -360,9 +396,12 @@ test("unmounting stops observing, so nothing is recorded or leaked afterwards", 
   const live = { snapshots: 0, events: 0 };
   const subscribe = flare.diagnostics.subscribe;
   const subscribeEvents = flare.diagnostics.events.subscribe;
+
   vi.spyOn(flare.diagnostics, "subscribe").mockImplementation((listener) => {
     live.snapshots += 1;
+
     const stop = subscribe(listener);
+
     return () => {
       live.snapshots -= 1;
       stop();
@@ -371,13 +410,16 @@ test("unmounting stops observing, so nothing is recorded or leaked afterwards", 
   vi.spyOn(flare.diagnostics.events, "subscribe").mockImplementation(
     (listener) => {
       live.events += 1;
+
       const stop = subscribeEvents(listener);
+
       return () => {
         live.events -= 1;
         stop();
       };
     },
   );
+
   const { devtools } = mountDevtools({ flare });
 
   expect(live).toEqual({ snapshots: 1, events: 1 });
@@ -390,6 +432,7 @@ test("unmounting stops observing, so nothing is recorded or leaked afterwards", 
 test("names are shown as text, never parsed as markup", () => {
   const mock = createMockAdapter({ name: "<img src=x onerror=alert(1)>" });
   const flare = new Flare({ destinations: { "<b>bold</b>": mock.adapter } });
+
   const { devtools, host, text } = mountDevtools({
     flare,
     initialIsOpen: true,
