@@ -2,7 +2,7 @@ import type { SentryEventLike } from "src/types/SentryEventLike";
 import type { SentryScopeLike } from "src/types/SentryScopeLike";
 
 /**
- * The part of a Sentry SDK the reporter calls. `@sentry/browser`,
+ * The part of a Sentry SDK the adapter calls. `@sentry/browser`,
  * `@sentry/react` and `@sentry/react-native` all satisfy it, so the package
  * imports none of them: the application injects the one it already uses.
  *
@@ -27,13 +27,18 @@ export type SentryLike = {
   addBreadcrumb: (
     breadcrumb: NonNullable<SentryEventLike["breadcrumbs"]>[number],
   ) => unknown;
-  /** Forks the current scope for the callback, which is what keeps a report event-local. */
-  withScope: (callback: (scope: SentryScopeLike) => void) => void;
+  /**
+   * Forks the current scope for the callback, which is what keeps a report
+   * event-local, and answers what the callback returns. React Native logs an
+   * error thrown inside the callback and answers `undefined` instead.
+   */
+  withScope: <TResult>(
+    callback: (scope: SentryScopeLike) => TResult,
+  ) => TResult | undefined;
   captureException: (exception: unknown) => string;
   captureMessage: (message: string) => string;
   /** React Native's `flush` takes no timeout; the core bounds the wait either way. */
   flush: (timeout?: number) => PromiseLike<boolean>;
-  close: () => PromiseLike<unknown>;
   /** `undefined` until `Sentry.init` has run. React Native has no `isInitialized`. */
   getClient: () => unknown;
   /** Supplies the history cleared by the ambient mirror on an account switch. */

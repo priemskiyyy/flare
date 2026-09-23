@@ -27,10 +27,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./react-native": {
-      "types": "./dist/reactNative.d.ts",
-      "import": "./dist/reactNative.js"
     }
   },
   "scripts": {
