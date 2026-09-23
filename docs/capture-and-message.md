@@ -21,15 +21,15 @@ try {
 }
 ```
 
-| Option       | What it does                                                                          |
-| ------------ | ------------------------------------------------------------------------------------- |
-| `tags`       | Tags for this report only, merged over the session tags by key.                       |
-| `contexts`   | Contexts for this report only. A context replaces a session context of the same name. |
-| `operation`  | A short name for what the application was doing.                                      |
-| `level`      | `fatal`, `error`, `warning` or `info`. A capture defaults to `error`.                 |
-| `user`       | Overrides the session user for this report only. `null` reports it as anonymous.      |
-| `to`         | Sends this report to exactly these destinations. See [routing](routing.md).           |
-| `dedupe.key` | Names the failure so that repeats are dropped. See below.                             |
+| Option       | What it does                                                                                                                        |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `tags`       | Tags for this report only, merged over the session tags by key.                                                                     |
+| `contexts`   | Contexts for this report only. A context replaces a session context of the same name.                                               |
+| `operation`  | A short name for what the application was doing, scrubbed and bounded like any string.                                              |
+| `level`      | `fatal`, `error`, `warning` or `info`. A capture defaults to `error`. Any other value is an `invalid` loss, and the default stands. |
+| `user`       | Overrides the session user for this report only. `null` reports it as anonymous.                                                    |
+| `to`         | Sends this report to exactly these destinations. See [routing](routing.md).                                                         |
+| `dedupe.key` | Names the failure so that repeats are dropped. See below.                                                                           |
 
 ## message
 
@@ -42,7 +42,7 @@ flare.message("Payment returned an unknown state", {
 });
 ```
 
-Flare is not a logger. A message is for something a person should look at, not for a record of normal activity. A provider that has no notion of a message says so: Crashlytics and, by default, Bugsnag skip messages with the reason `unsupported-report-kind`. See [provider limitations](provider-limitations.md).
+Flare is not a logger. A message is for something a person should look at, not for a record of normal activity. A provider that has no notion of a message says so: Crashlytics, Datadog RUM and PostHog skip messages, and Bugsnag does by default, with the reason `unsupported-report-kind`. Datadog Logs and OpenTelemetry send them. See [provider limitations](provider-limitations.md).
 
 ## What happens to the thrown value
 
@@ -72,18 +72,18 @@ flare.capture(new Error("Socket closed"), { dedupe: { key: "socket-closed" } });
 
 A key is remembered per destination and per signed-in account, so a repeat after an account switch is reported again. Unlike the same-object check, a key has no time window: it stays remembered until 100 newer keys push it out, so use a key for a failure you want reported once, not once a second.
 
-A dropped duplicate is visible on its receipt as `dropped` with the reason `deduped`. The `dedupe` option sets the window for the same-object check, where `0` turns that check off, and `maxKeys` sets how many keys are remembered:
+A dropped duplicate is visible on its receipt as `dropped` with the reason `deduped`. The `dedupe` option sets `window`, the same-object window in milliseconds, 1000 by default, where `0` turns that check off:
 
 ```ts
 import { Flare } from "@priemskiyyy/flare";
-import { consoleReporter } from "@priemskiyyy/flare-console";
+import { console } from "@priemskiyyy/flare-console";
 
 const flare = new Flare({
-  destinations: { console: consoleReporter() },
-  dedupe: { windowMs: 0 },
+  destinations: { console: console() },
+  dedupe: { window: 0 },
 });
 ```
 
 ## Error storms
 
-A render loop that throws can produce thousands of reports. Flare admits 120 reports a minute by default and drops the rest with the reason `rate-limited`, recording one diagnostic event when the limit is first reached. Change it with `limits: { reportsPerMinute }`.
+A render loop that throws can produce thousands of reports. Flare admits 120 reports a minute by default and drops the rest with the reason `rate-limited`, recording one diagnostic event when the limit is first reached. A report dropped as `stale-scope` spends none of that budget. Change it with `rateLimits: { perMinute }`.
