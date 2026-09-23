@@ -1,10 +1,10 @@
 ---
-description: "Mount the Flare devtools to see each destination's status and capabilities, and follow a report from capture to its outcome, without exposing report content."
+description: "Mount the Flare devtools to see each destination's status and queues, and follow a report from capture to its outcome, without exposing report content."
 ---
 
 # Devtools
 
-The devtools are an in-page inspector. They show where each destination stands, what it declared it can do, how many reports are buffered or in flight, and a timeline of what happened to every report.
+The devtools are an in-page inspector. They show where each destination stands, how many reports are buffered or in flight, and a timeline of what happened to every report.
 
 ```sh
 pnpm add -D @priemskiyyy/flare-devtools
@@ -24,7 +24,7 @@ export const Root = () => (
 );
 ```
 
-Vue, Solid and Svelte have a wrapper of their own, under `./vue`, `./solid` and `./svelte`. Each reads the Flare from its provider and renders nothing on the server. The inspector itself is framework independent: it carries its own small UI runtime inside its bundle, so your application needs nothing installed for it.
+Vue and Solid have a component of their own, under `./vue` and `./solid`. Svelte has an attachment under `./svelte`, `createDevtools()`, used as `<div {@attach devtools}>`, which needs Svelte 5.29. Each reads the Flare from its provider, and on the server renders at most an empty host element. The inspector itself is framework independent: it carries its own small UI runtime inside its bundle, so your application needs nothing installed for it.
 
 Anywhere else:
 
@@ -32,6 +32,7 @@ Anywhere else:
 import { FlareDevtools } from "@priemskiyyy/flare-devtools";
 
 const devtools = new FlareDevtools({ flare });
+
 devtools.mount(document.body.appendChild(document.createElement("div")));
 ```
 
@@ -39,7 +40,7 @@ Keep it out of production with a condition your bundler can remove, as above.
 
 ## What you get
 
-A launcher whose dot turns red when something failed while the panel was closed. A panel that docks to the bottom or the right and resizes. Each destination with its status, its queues and what it declared. A timeline you can search, filter by kind or by destination, pause and clear, where every row expands to its context. Anything that did not verifiably arrive is filed under errors.
+A launcher whose dot turns red when something failed while the panel was closed. A panel that docks to the bottom or the right and resizes. Each destination with its status and its queues. A timeline you can search, filter by kind or by destination, pause and clear, where every row expands to its context. Anything that did not verifiably arrive is filed under errors.
 
 ## It only reads
 
@@ -55,6 +56,7 @@ const unsubscribe = flare.diagnostics.events.subscribe((event) => {
 });
 
 const snapshot = flare.diagnostics.get();
+
 console.log(
   snapshot.status.state,
   snapshot.pendingReceipts,
