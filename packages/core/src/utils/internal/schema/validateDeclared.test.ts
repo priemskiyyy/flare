@@ -81,8 +81,8 @@ test("a validator that throws is a rejection, not a crash", () => {
 });
 
 test("a validator keeps its receiver", () => {
-  const standard = {
-    version: 1 as const,
+  const standard: StandardSchema["~standard"] = {
+    version: 1,
     vendor: "test",
     validate(value: unknown) {
       expect(this).toBe(standard);
