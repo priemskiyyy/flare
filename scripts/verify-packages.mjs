@@ -285,17 +285,21 @@ try {
 
   write(
     "contracts.tsx",
-    `import { createReporterAdapter, DEFAULT_REDACT, Flare, rebuildError } from "@priemskiyyy/flare";
+    `import { Flare, isSensitiveKey, SanitizedError } from "@priemskiyyy/flare";
 import type { FlareSchema, Receipt, ReporterAdapter, SanitizedReport, StandardSchema } from "@priemskiyyy/flare";
 import { createMockAdapter } from "@priemskiyyy/flare/mock";
 import type { MockSession } from "@priemskiyyy/flare/mock";
-import { consoleReporter } from "@priemskiyyy/flare-console";
+import { console } from "@priemskiyyy/flare-console";
 import { http } from "@priemskiyyy/flare-http";
 import { sentry } from "@priemskiyyy/flare-sentry";
-import { sentry as sentryReactNative } from "@priemskiyyy/flare-sentry/react-native";
 import { bugsnag } from "@priemskiyyy/flare-bugsnag";
-import { bugsnag as bugsnagReactNative } from "@priemskiyyy/flare-bugsnag/react-native";
 import { crashlytics } from "@priemskiyyy/flare-crashlytics";
+import { posthog } from "@priemskiyyy/flare-posthog";
+import { posthog as posthogReactNative } from "@priemskiyyy/flare-posthog-react-native";
+import { datadog } from "@priemskiyyy/flare-datadog";
+import { datadog as datadogReactNative } from "@priemskiyyy/flare-datadog-react-native";
+import { datadogLogs } from "@priemskiyyy/flare-datadog-logs";
+import { opentelemetry } from "@priemskiyyy/flare-opentelemetry";
 import { traceBreadcrumbs } from "@priemskiyyy/flare-trace";
 import type { TraceEventSource } from "@priemskiyyy/flare-trace";
 import { FlareDevtools } from "@priemskiyyy/flare-devtools";
@@ -309,7 +313,14 @@ const expectType = <TCheck extends true>(check: TCheck) => check;
 declare const schemaOf: <TValue>() => StandardSchema<TValue>;
 declare const sentrySdk: Parameters<typeof sentry>[0]["sdk"];
 declare const bugsnagSdk: Parameters<typeof bugsnag>[0]["sdk"];
+declare const bugsnagBreadcrumb: Parameters<typeof bugsnag>[0]["Breadcrumb"];
 declare const crashlyticsSdk: Parameters<typeof crashlytics>[0]["sdk"];
+declare const posthogSdk: Parameters<typeof posthog>[0]["sdk"];
+declare const posthogClient: Parameters<typeof posthogReactNative>[0]["sdk"];
+declare const datadogSdk: Parameters<typeof datadog>[0]["sdk"];
+declare const ddRum: Parameters<typeof datadogReactNative>[0]["sdk"];
+declare const browserLogs: Parameters<typeof datadogLogs>[0]["sdk"];
+declare const otelLogger: Parameters<typeof opentelemetry>[0]["logger"];
 
 const schema = {
   tags: { area: schemaOf<"upload" | "editor">() },
@@ -321,7 +332,7 @@ declare const attemptSchema: StandardSchema<string, number>;
 const readonlyRoute = ["mock"] as const;
 const transformed = new Flare({
   destinations: { mock: createMockAdapter().adapter },
-  default: readonlyRoute,
+  defaults: { to: readonlyRoute },
   schema: { tags: { attempt: attemptSchema } },
 });
 transformed.tag("attempt", "2");
@@ -331,17 +342,36 @@ transformed.tag("attempt", 2);
 
 export const flare = new Flare({
   destinations: {
-    console: consoleReporter(),
-    backend: http({ endpoint: "/api/error-reports", authorize: () => ({ authorization: "Bearer token" }) }),
+    console: console(),
+    backend: http({
+      // A client that resolves with nothing: the receipt then has no event id.
+      request: async ({ report, signal }) => {
+        await fetch("/api/error-reports", { method: "POST", body: JSON.stringify(report), signal });
+      },
+    }),
     sentry: sentry({ sdk: sentrySdk }),
-    bugsnag: bugsnag({ sdk: bugsnagSdk, messages: "as-error" }),
+    bugsnag: bugsnag({ sdk: bugsnagSdk, Breadcrumb: bugsnagBreadcrumb, messages: "as-error" }),
     crashlytics: crashlytics({ sdk: crashlyticsSdk, ambient: { user: true } }),
     mock: createMockAdapter().adapter,
   },
-  default: ["sentry", "backend"],
+  defaults: { to: ["sentry", "backend"] },
   schema,
-  privacy: { redact: [...DEFAULT_REDACT, "ssn"], scrub: (text) => text },
+  privacy: { redact: (key) => isSensitiveKey(key) || key === "ssn", scrub: (text) => text },
 });
+
+// Adapters over provider SDKs a consumer installs separately.
+export const providers = new Flare({
+  destinations: {
+    posthog: posthog({ sdk: posthogSdk }),
+    posthogMobile: posthogReactNative({ sdk: posthogClient }),
+    datadog: datadog({ sdk: datadogSdk }),
+    datadogMobile: datadogReactNative({ sdk: ddRum }),
+    datadogLogs: datadogLogs({ sdk: browserLogs }),
+    otel: opentelemetry({ logger: otelLogger, forceFlush: async () => {} }),
+  },
+});
+export const posthogHandle: typeof posthogSdk | null = providers.destination("posthog").native;
+export const ddRumHandle: typeof ddRum | null = providers.destination("datadogMobile").native;
 
 // The registered path: one augmentation types every hook and the boundary.
 declare module "@priemskiyyy/flare-react" {
@@ -356,8 +386,8 @@ const receipt: Receipt<RegisteredDestinationName> = flare.capture(new Error("typ
 export const settled = receipt.settled.then((status) => (status.state === "settled" ? status.outcomes.backend?.status : null));
 export const mockSession: MockSession | null = flare.destination("mock").native;
 
-// @ts-expect-error -- "datadog" is not a registered destination.
-flare.capture(new Error("typed"), { to: ["datadog"] });
+// @ts-expect-error -- "newrelic" is not a registered destination.
+flare.capture(new Error("typed"), { to: ["newrelic"] });
 // @ts-expect-error -- "billing" is not a declared area.
 flare.tag("area", "billing");
 // @ts-expect-error -- "clicked" is not a declared breadcrumb.
@@ -370,8 +400,8 @@ export const View = () => {
   const status = useFlareStatus();
   const backend = useDestinationStatus("backend");
   registered.tag("area", "editor");
-  // @ts-expect-error -- "datadog" is not a registered destination.
-  useDestinationStatus("datadog");
+  // @ts-expect-error -- "newrelic" is not a registered destination.
+  useDestinationStatus("newrelic");
   // @ts-expect-error -- "billing" is not a declared area.
   registered.tag("area", "billing");
   return <span>{status.state + backend.state}</span>;
@@ -399,9 +429,8 @@ export const stop: () => void = traceBreadcrumbs({
 });
 
 // A third party can write an adapter from the published types alone.
-export const custom: ReporterAdapter<{ sent: SanitizedReport[] }> = createReporterAdapter({
+export const custom: ReporterAdapter<{ sent: SanitizedReport[] }> = {
   name: "custom",
-  capabilities: consoleReporter().capabilities,
   open: () => {
     const sent: SanitizedReport[] = [];
     return {
@@ -409,15 +438,13 @@ export const custom: ReporterAdapter<{ sent: SanitizedReport[] }> = createReport
       submit: (report) => {
         sent.push(report);
         if (report.kind === "exception") {
-          rebuildError(report.exception);
+          new SanitizedError(report.exception);
         }
         return { status: "submitted", evidence: "sdk-call-returned" };
       },
     };
   },
-});
-
-export const reactNativeAdapters = [sentryReactNative({ sdk: sentrySdk }), bugsnagReactNative({ sdk: bugsnagSdk })];
+};
 `,
   );
 
@@ -428,13 +455,17 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import * as core from "@priemskiyyy/flare";
 import * as mock from "@priemskiyyy/flare/mock";
-import * as consoleReporter from "@priemskiyyy/flare-console";
+import * as consoleAdapter from "@priemskiyyy/flare-console";
 import * as http from "@priemskiyyy/flare-http";
 import * as sentry from "@priemskiyyy/flare-sentry";
-import * as sentryReactNative from "@priemskiyyy/flare-sentry/react-native";
 import * as bugsnag from "@priemskiyyy/flare-bugsnag";
-import * as bugsnagReactNative from "@priemskiyyy/flare-bugsnag/react-native";
 import * as crashlytics from "@priemskiyyy/flare-crashlytics";
+import * as posthog from "@priemskiyyy/flare-posthog";
+import * as posthogReactNative from "@priemskiyyy/flare-posthog-react-native";
+import * as datadog from "@priemskiyyy/flare-datadog";
+import * as datadogReactNative from "@priemskiyyy/flare-datadog-react-native";
+import * as datadogLogs from "@priemskiyyy/flare-datadog-logs";
+import * as opentelemetry from "@priemskiyyy/flare-opentelemetry";
 import * as trace from "@priemskiyyy/flare-trace";
 import * as devtools from "@priemskiyyy/flare-devtools";
 import * as react from "@priemskiyyy/flare-react";
@@ -450,15 +481,19 @@ import { renderToString as renderVueToString } from "vue/server-renderer";
 
 // Named exports only, and exactly the ones each package promises.
 const surfaces = [
-  [core, ["DEFAULT_REDACT", "Flare", "createReporterAdapter", "rebuildError"]],
+  [core, ["Flare", "FlareError", "SanitizedError", "isSensitiveKey"]],
   [mock, ["createMockAdapter"]],
-  [consoleReporter, ["consoleReporter"]],
+  [consoleAdapter, ["console"]],
   [http, ["http"]],
   [sentry, ["sentry"]],
-  [sentryReactNative, ["sentry"]],
   [bugsnag, ["bugsnag"]],
-  [bugsnagReactNative, ["bugsnag"]],
   [crashlytics, ["crashlytics"]],
+  [posthog, ["posthog"]],
+  [posthogReactNative, ["posthog"]],
+  [datadog, ["datadog"]],
+  [datadogReactNative, ["datadog"]],
+  [datadogLogs, ["datadogLogs"]],
+  [opentelemetry, ["opentelemetry"]],
   [trace, ["traceBreadcrumbs"]],
   [devtools, ["FlareDevtools"]],
   [react, ["FlareErrorBoundary", "FlareProvider", "useDestinationStatus", "useFlare", "useFlareStatus"]],
@@ -476,12 +511,11 @@ const lines = [];
 const requests = [];
 const flare = new core.Flare({
   destinations: {
-    console: consoleReporter.consoleReporter({ writer: ({ line }) => lines.push(line) }),
+    console: consoleAdapter.console({ writer: ({ line }) => lines.push(line) }),
     backend: http.http({
-      endpoint: "https://api.example.test/error-reports",
-      fetch: async (url, init) => {
-        requests.push({ url, init });
-        return Response.json({ id: "evt_1" }, { status: 202 });
+      request: async ({ report, signal }) => {
+        requests.push({ report, signal });
+        return { id: "evt_1" };
       },
     }),
   },
@@ -511,11 +545,110 @@ assert.equal(status.state, "settled");
 assert.deepEqual(status.outcomes.console, { status: "submitted", evidence: "sdk-call-returned", event: null, losses: [] });
 assert.deepEqual(status.outcomes.backend, { status: "submitted", evidence: "backend-acknowledged", event: { id: "evt_1" }, losses: [] });
 assert.equal(lines[0], "[flare] error Error: captured before start, with [key]");
-assert.equal(requests[0].init.headers["idempotency-key"], early.id);
+assert.equal(requests[0].report.id, early.id);
 assert.equal(JSON.stringify(requests).includes("sk_live_12345"), false);
 
 flare.dispose();
 assert.deepEqual((await flare.capture(new Error("late")).settled), { state: "dropped", reason: "disposed" });
+
+// An adapter over an injected SDK, through its packed bundle.
+const captured = [];
+const posthogFlare = new core.Flare({
+  destinations: {
+    posthog: posthog.posthog({
+      sdk: {
+        __loaded: true,
+        exceptions: {},
+        get_distinct_id: () => "user_42",
+        captureException: (error, properties) => {
+          captured.push({ error, properties });
+          return { uuid: "uuid_1" };
+        },
+      },
+    }),
+  },
+});
+posthogFlare.start();
+posthogFlare.user({ id: "user_42" });
+const exception = posthogFlare.capture(new Error("upload failed"), { tags: { area: "upload" } });
+assert.deepEqual((await exception.settled).outcomes.posthog, { status: "submitted", evidence: "sdk-call-returned", event: { id: "uuid_1" }, losses: [] });
+assert.equal(captured[0].error.message, "upload failed");
+// One core, so the adapter's error is the class the application imports.
+assert.ok(captured[0].error instanceof core.SanitizedError);
+assert.equal(captured[0].properties.area, "upload");
+assert.equal(captured[0].properties["flare.report_id"], exception.id);
+posthogFlare.dispose();
+
+const addedErrors = [];
+const datadogFlare = new core.Flare({
+  destinations: {
+    datadog: datadog.datadog({
+      sdk: {
+        getInitConfiguration: () => ({ applicationId: "app" }),
+        getUser: () => ({}),
+        addError: (error, context) => addedErrors.push({ error, context }),
+      },
+    }),
+  },
+});
+datadogFlare.start();
+const failure = datadogFlare.capture(new Error("upload failed"), { tags: { area: "upload" } });
+assert.equal((await failure.settled).outcomes.datadog.status, "submitted");
+assert.equal(addedErrors[0].error.message, "upload failed");
+assert.equal(addedErrors[0].context.flare.tags.area, "upload");
+assert.equal(addedErrors[0].context.flare.report_id, failure.id);
+datadogFlare.dispose();
+
+const recorded = [];
+const mobileFlare = new core.Flare({
+  destinations: {
+    datadog: datadogReactNative.datadog({
+      sdk: { addError: async (message, source, stacktrace, context, timestamp) => recorded.push({ message, source, context, timestamp }) },
+    }),
+    posthog: posthogReactNative.posthog({
+      sdk: {
+        ready: async () => {},
+        getDistinctId: () => "anonymous",
+        captureException: (error, properties) => recorded.push({ error, properties }),
+        flush: async () => {},
+      },
+    }),
+  },
+});
+mobileFlare.start();
+const mobile = mobileFlare.capture(new Error("sync failed"));
+const mobileStatus = await mobile.settled;
+assert.equal(mobileStatus.outcomes.datadog.status, "submitted");
+assert.equal(mobileStatus.outcomes.posthog.status, "submitted");
+assert.equal(recorded[0].message, "sync failed");
+assert.equal(recorded[0].context.flare.report_id, mobile.id);
+assert.equal(recorded[1].properties["flare.report_id"], mobile.id);
+mobileFlare.dispose();
+
+const logged = [];
+const emitted = [];
+const logsFlare = new core.Flare({
+  destinations: {
+    logs: datadogLogs.datadogLogs({
+      sdk: {
+        getInitConfiguration: () => ({ clientToken: "pub" }),
+        getUser: () => ({}),
+        logger: { log: (message, context, status, error) => logged.push({ message, context, status, error }) },
+      },
+    }),
+    otel: opentelemetry.opentelemetry({ logger: { emit: (record) => emitted.push(record) } }),
+  },
+});
+logsFlare.start();
+const note = logsFlare.message("checkout retried", { level: "warning" });
+const noteStatus = await note.settled;
+assert.equal(noteStatus.outcomes.logs.status, "submitted");
+assert.equal(noteStatus.outcomes.otel.status, "submitted");
+assert.deepEqual([logged[0].message, logged[0].status, logged[0].error], ["checkout retried", "warn", undefined]);
+assert.equal(logged[0].context.flare.report_id, note.id);
+assert.deepEqual([emitted[0].body, emitted[0].severityNumber], ["checkout retried", 13]);
+assert.equal(emitted[0].attributes["flare.report_id"], note.id);
+logsFlare.dispose();
 console.log("The packed packages work end to end.");
 `,
   );
@@ -563,8 +696,8 @@ expectType<Equal<SvelteName, Names>>(true);
 export const useVue = () => {
   vue.useFlare().value.tag("area", "editor");
   const state: string = vue.useDestinationStatus("backend").value.state;
-  // @ts-expect-error -- "datadog" is not a registered destination.
-  vue.useDestinationStatus("datadog");
+  // @ts-expect-error -- "newrelic" is not a registered destination.
+  vue.useDestinationStatus("newrelic");
   // @ts-expect-error -- "billing" is not a declared area.
   vue.useFlare().value.tag("area", "billing");
   return [state, vue.useFlareStatus().value.state, h(VueDevtools, { maxEvents: 100 })];
@@ -573,16 +706,16 @@ export const useVue = () => {
 export const useSolid = () => {
   solid.useFlare()().tag("area", "editor");
   const state: string = solid.useDestinationStatus("backend")().state;
-  // @ts-expect-error -- "datadog" is not a registered destination.
-  solid.useDestinationStatus("datadog");
+  // @ts-expect-error -- "newrelic" is not a registered destination.
+  solid.useDestinationStatus("newrelic");
   return [state, solid.useFlareStatus()().state, createComponent(SolidDevtools, { initialIsOpen: true })];
 };
 
 export const useSvelte = () => {
   svelte.useFlare().current.tag("area", "editor");
   const state: string = svelte.useDestinationStatus("backend").current.state;
-  // @ts-expect-error -- "datadog" is not a registered destination.
-  svelte.useDestinationStatus("datadog");
+  // @ts-expect-error -- "newrelic" is not a registered destination.
+  svelte.useDestinationStatus("newrelic");
   return [state, svelte.useFlareStatus().current.state, createDevtools({ maxEvents: 100 })];
 };
 
