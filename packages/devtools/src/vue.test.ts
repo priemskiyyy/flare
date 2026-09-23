@@ -41,7 +41,7 @@ test("the Vue wrapper mounts the inspector for the provider's Flare, follows ano
   const host = wrapper.find("[data-flare-devtools]").element;
 
   expect(host.shadowRoot?.textContent).toContain("All destinations");
-  expect(first.mock.openings).toEqual([]);
+  expect(first.mock.sessions).toEqual([]);
 
   current.value = second.flare;
   await nextTick();
@@ -59,5 +59,5 @@ test("server rendering emits only the host element and observes nothing", async 
 
   expect(html).toMatch(/<div data-flare-devtools(="")?><\/div>/);
   expect(subscribe).not.toHaveBeenCalled();
-  expect(mock.openings).toEqual([]);
+  expect(mock.sessions).toEqual([]);
 });

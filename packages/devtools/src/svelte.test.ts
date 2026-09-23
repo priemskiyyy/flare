@@ -29,7 +29,7 @@ test("the Svelte attachment mounts the inspector for the provider's Flare, follo
   const host = view.container.querySelector("div div");
 
   expect(host?.shadowRoot?.textContent).toContain("All destinations");
-  expect(first.mock.openings).toEqual([]);
+  expect(first.mock.sessions).toEqual([]);
 
   await view.rerender({ flare: second.flare });
   await tick();

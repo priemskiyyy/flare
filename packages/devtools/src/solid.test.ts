@@ -39,7 +39,7 @@ test("the Solid wrapper mounts the inspector for the provider's Flare, follows a
   const host = container.querySelector("[data-flare-devtools]");
 
   expect(host?.shadowRoot?.textContent).toContain("All destinations");
-  expect(first.mock.openings).toEqual([]);
+  expect(first.mock.sessions).toEqual([]);
 
   setFlare(() => second.flare);
   expect(subscribe).toHaveBeenCalled();

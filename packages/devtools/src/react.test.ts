@@ -60,7 +60,7 @@ test("Strict Mode mounts one inspector, and unmounting leaves no listener behind
   view.unmount();
 
   expect(live.count).toBe(0);
-  expect(mock.openings).toEqual([]);
+  expect(mock.sessions).toEqual([]);
   expect(mock.submissions).toEqual([]);
 });
 
@@ -72,5 +72,5 @@ test("on the server the wrapper renders only its empty host element and observes
 
   expect(html).toBe('<div data-flare-devtools=""></div>');
   expect(subscribe).not.toHaveBeenCalled();
-  expect(mock.openings).toEqual([]);
+  expect(mock.sessions).toEqual([]);
 });
