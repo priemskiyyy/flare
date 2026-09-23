@@ -85,7 +85,11 @@ const turn = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 test("a primitive used outside a provider fails with a message that names the provider", () => {
   expect(() => render(() => <Status />)).toThrow(
-    "Flare primitives must be used within a FlareProvider.",
+    expect.objectContaining({
+      name: "FlareError",
+      code: "INVALID_CONFIGURATION",
+      message: "Flare primitives must be used within a FlareProvider.",
+    }),
   );
 });
 
@@ -114,12 +118,12 @@ test("observing is passive: mounting the provider and every status primitive ope
 
   expect(view.container.textContent).toBe("idle/idle");
   expect(flare.status.get()).toEqual({ state: "idle" });
-  expect(mock.openings).toEqual([]);
+  expect(mock.sessions).toEqual([]);
   expect(mock.submissions).toEqual([]);
 });
 
 test("the status primitives follow the runtime and one destination, to ready and to failed", () => {
-  const { flare } = create({ holdOpen: true });
+  const { flare } = create();
 
   const failing = create({
     onOpen: () => {
@@ -130,7 +134,7 @@ test("the status primitives follow the runtime and one destination, to ready and
   const { view, setFlare } = renderWith(flare);
 
   flare.start();
-  expect(view.container.textContent).toBe("started/starting");
+  expect(view.container.textContent).toBe("started/ready");
 
   setFlare(() => failing.flare);
   failing.flare.start();
@@ -141,7 +145,9 @@ test("a destination name given as an accessor is followed when it changes", () =
   const first = createMockAdapter();
 
   const second = createMockAdapter({
-    available: { available: false, reason: "not here" },
+    onOpen: () => {
+      throw new Error("not here");
+    },
   });
 
   const flare = new Flare({
@@ -169,7 +175,7 @@ test("a destination name given as an accessor is followed when it changes", () =
 
   setName("backup");
 
-  expect(view.container.textContent).toBe("unavailable");
+  expect(view.container.textContent).toBe("failed");
 });
 
 test("a status callback is told about later changes, and not about the value it started with", () => {
@@ -194,10 +200,7 @@ test("a status callback is told about later changes, and not about the value it 
   flare.start();
 
   expect(flareChanges).toEqual([{ state: "started" }]);
-  expect(destinationChanges.map((status) => status.state)).toEqual([
-    "starting",
-    "ready",
-  ]);
+  expect(destinationChanges.map((status) => status.state)).toEqual(["ready"]);
   expect(view.container.textContent).toBe("started");
 });
 

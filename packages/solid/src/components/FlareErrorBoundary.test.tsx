@@ -170,5 +170,11 @@ test("a boundary outside a provider fails with a message that names the provider
         <p>child</p>
       </FlareErrorBoundary>
     )),
-  ).toThrow("FlareErrorBoundary must be used within a FlareProvider.");
+  ).toThrow(
+    expect.objectContaining({
+      name: "FlareError",
+      code: "INVALID_CONFIGURATION",
+      message: "FlareErrorBoundary must be used within a FlareProvider.",
+    }),
+  );
 });
