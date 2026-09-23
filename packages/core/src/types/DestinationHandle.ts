@@ -1,6 +1,5 @@
 import type { DestinationStatus } from "src/types/DestinationStatus";
 import type { ObservableValue } from "src/types/ObservableValue";
-import type { ReporterCapabilities } from "src/types/ReporterCapabilities";
 
 /**
  * The escape hatch to one destination. Reading it is passive: it starts
@@ -15,7 +14,6 @@ import type { ReporterCapabilities } from "src/types/ReporterCapabilities";
  * ```
  */
 export type DestinationHandle<TNative = unknown> = {
-  readonly capabilities: ReporterCapabilities;
   readonly status: ObservableValue<DestinationStatus>;
   /** The provider handle, or `null` until the destination is ready. */
   readonly native: TNative | null;

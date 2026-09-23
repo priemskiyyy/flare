@@ -26,14 +26,13 @@ const inspected = diagnostics.destinations[0];
 if (inspected !== undefined) {
   // @ts-expect-error -- destination observations are frozen.
   inspected.buffered = 42;
-  // @ts-expect-error -- capabilities describe the adapter rather than configure it.
-  inspected.capabilities.messages = false;
 }
 
-// @ts-expect-error -- a handle cannot replace its declared capabilities.
-destination.capabilities = { ...destination.capabilities };
-// @ts-expect-error -- nested capability observations are frozen too.
-destination.capabilities.eventLocal.contexts = false;
+// @ts-expect-error -- a handle cannot replace the status it observes.
+destination.status = {
+  get: () => ({ state: "idle" }),
+  subscribe: () => () => {},
+};
 
 // @ts-expect-error -- observing runtime state does not grant control over it.
 runtimeStatus.state = "disposed";

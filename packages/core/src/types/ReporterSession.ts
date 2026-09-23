@@ -8,7 +8,18 @@ import type { SubmissionResult } from "src/types/SubmissionResult";
 /**
  * One opened destination. `submit` receives frozen, sanitized data and must
  * keep everything event-local: it never mutates provider globals, not even
- * temporarily. `flush` and `ambient` are absent when unsupported.
+ * temporarily. The runtime calls `dispose` once and nothing after it.
+ *
+ * @example
+ * ```ts
+ * const session: ReporterSession<Beacon> = {
+ *   native: beacon,
+ *   submit: (report) => {
+ *     beacon.send(JSON.stringify(report));
+ *     return { status: "submitted", evidence: "sdk-call-returned" };
+ *   },
+ * };
+ * ```
  */
 export type ReporterSession<TNative = unknown> = {
   native: TNative;
@@ -16,7 +27,9 @@ export type ReporterSession<TNative = unknown> = {
     report: SanitizedReport,
     context: SubmissionContext,
   ) => SubmissionResult | Promise<SubmissionResult>;
+  /** Waits for the provider's own queue. Omit it when the provider has none. */
   flush?: (context: FlushContext) => FlushResult | Promise<FlushResult>;
   ambient?: AmbientReporterContext;
-  dispose: () => void | Promise<void>;
+  /** Takes back what `open` set up. Omit it when `open` set up nothing. */
+  dispose?: () => void | Promise<void>;
 };

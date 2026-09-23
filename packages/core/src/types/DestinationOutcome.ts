@@ -42,7 +42,6 @@ export type DestinationOutcome =
   | {
       readonly status: "skipped";
       readonly reason:
-        | "unavailable"
         | "start-failed"
         | "unsupported-report-kind"
         | "auth-subject-mismatch"
