@@ -14,18 +14,18 @@ Uncaught errors and native crashes are already owned by your provider SDK, and i
 - Two libraries that both install a global handler report every uncaught error twice, in an order neither controls.
 - A handler that Flare installed would have to be removed on `dispose()`, and restoring a chain of handlers that someone else has since extended cannot be done safely.
 
-Each adapter declares this in its capabilities. `automaticCapture` is `provider-owned` for Sentry, Bugsnag and Crashlytics, and `none` for the HTTP and console adapters.
+Sentry, Bugsnag and Crashlytics each capture uncaught errors and native crashes on their own. Datadog RUM, Datadog Logs with `forwardErrorsToLogs` and PostHog's exception autocapture collect errors by themselves too. The HTTP, console and OpenTelemetry adapters capture nothing by themselves.
 
 ## Who reports what
 
-| Failure                                  | Who reports it                                  |
-| ---------------------------------------- | ----------------------------------------------- |
-| An error you catch                       | You, with `flare.capture(error)`                |
-| A React render error                     | [`FlareErrorBoundary`](react.md), through Flare |
-| An uncaught error or unhandled rejection | The provider SDK's own handler, outside Flare   |
-| A native crash                           | The provider's native SDK, outside Flare        |
+| Failure                                       | Who reports it                                    |
+| --------------------------------------------- | ------------------------------------------------- |
+| An error you catch                            | You, with `flare.capture(error)`                  |
+| A render error in React, Vue, Solid or Svelte | The binding's `FlareErrorBoundary`, through Flare |
+| An uncaught error or unhandled rejection      | The provider SDK's own handler, outside Flare     |
+| A native crash                                | The provider's native SDK, outside Flare          |
 
-Reports that a provider captures by itself do not pass through Flare, so they get no routing, no receipt and no Flare redaction. To make them carry the same user, tags, contexts and breadcrumbs, turn on the adapter's ambient mirror:
+Reports that a provider captures by itself do not pass through Flare, so they get no routing, no receipt and no Flare redaction. To make them carry the same user, tags, contexts and breadcrumbs, turn on the adapter's ambient mirror. Sentry, Bugsnag and Crashlytics have one; the others deliberately do not, because their SDK merges global state into every event:
 
 ```ts
 import { sentry } from "@priemskiyyy/flare-sentry";
@@ -37,11 +37,11 @@ const destination = sentry({
 });
 ```
 
-The mirror copies session data, which is already sanitized, into the provider SDK's global state. Each part is opt-in, nothing is mirrored by default, and an adapter clears what it mirrored when the account changes and when it is disposed.
+The mirror copies session data, which is already sanitized, into the provider SDK's global state. Each part is opt-in, and nothing is mirrored by default. An adapter clears the user, tags and contexts it mirrored when the account changes and when it is disposed. Mirrored breadcrumbs are cleared only by Sentry, on an account change; Bugsnag breadcrumbs and Crashlytics log lines cannot be taken back.
 
 ## If you only use the HTTP adapter
 
-Then nothing owns uncaught errors, and you decide. Forwarding them is a few lines, and they stay yours to remove:
+Then nothing owns uncaught errors, and you decide. The same holds for the console and OpenTelemetry adapters. Forwarding them is a few lines, and they stay yours to remove:
 
 ```ts
 const handleError = (event: ErrorEvent) => {
@@ -60,4 +60,4 @@ Do this only when no provider SDK is doing it already, or every uncaught error a
 
 ## Capturing inside a capture
 
-If a provider SDK's own hook reports an error while Flare is submitting to it, that capture is dropped with the reason `reentrant`. Without this rule, an adapter that fails while reporting would report its own failure, forever.
+If a provider SDK's own hook reports an error synchronously from inside Flare's submission to it, that capture is dropped with the reason `reentrant`. Without this rule, an adapter that fails while reporting would report its own failure, forever.
