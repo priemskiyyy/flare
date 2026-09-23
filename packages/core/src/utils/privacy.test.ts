@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { createMockAdapter } from "src/mock/createMockAdapter";
 import type { FlareDiagnosticEvent } from "src/types/FlareDiagnosticEvent";
+import type { FlarePrivacy } from "src/types/FlarePrivacy";
 import type { FlareSchema } from "src/types/FlareSchema";
 import type { StandardSchema } from "src/types/StandardSchema";
 import { Flare } from "src/utils/Flare";
@@ -22,6 +23,156 @@ const area: StandardSchema<"upload" | "editor"> = {
     },
   },
 };
+
+test("the predicate is read once, when the Flare is built", () => {
+  const mock = createMockAdapter();
+  const privacy: FlarePrivacy = { redact: (key) => key === "ssn" };
+  const flare = new Flare({ destinations: { primary: mock.adapter }, privacy });
+
+  flare.start();
+  privacy.redact = () => false;
+
+  flare.capture(new Error("boom"), {
+    contexts: { person: { ssn: "078-05-1120" } },
+  });
+
+  expect(mock.submissions[0]?.report.contexts).toEqual({
+    person: { ssn: "[Redacted]" },
+  });
+});
+
+test("the predicate is asked about every key with its full path, and about each context and breadcrumb by name", () => {
+  const asked: string[] = [];
+  const mock = createMockAdapter();
+
+  const flare = new Flare({
+    destinations: { primary: mock.adapter },
+    privacy: {
+      redact: (key, path) => {
+        asked.push(`${key} ${path}`);
+
+        return false;
+      },
+    },
+  });
+
+  flare.start();
+  flare.breadcrumb("opened", { screen: "cart" });
+  flare.capture(new Error("boom"), {
+    tags: { plan: "pro" },
+    contexts: { payment: { card: { last4: "4242" } } },
+  });
+
+  expect(asked).toEqual(
+    expect.arrayContaining([
+      "opened breadcrumbs.opened",
+      "screen breadcrumbs.opened.screen",
+      "plan tags.plan",
+      "payment contexts.payment",
+      "card contexts.payment.card",
+      "last4 contexts.payment.card.last4",
+    ]),
+  );
+});
+
+test("a context or breadcrumb whose name is sensitive is redacted whole, by default too", () => {
+  const mock = createMockAdapter();
+  const flare = new Flare({ destinations: { primary: mock.adapter } });
+
+  flare.start();
+  flare.context("apiKey", { value: SECRET });
+  flare.breadcrumb("token", { value: SECRET });
+  flare.capture(new Error("boom"));
+
+  const report = mock.submissions[0]?.report;
+
+  expect(report?.contexts).toEqual({});
+  expect(report?.breadcrumbs).toEqual([
+    expect.objectContaining({ name: "token", data: null }),
+  ]);
+  expect(JSON.stringify(report)).not.toContain(SECRET);
+});
+
+test("a predicate that throws drops the report rather than send it unredacted", () => {
+  const mock = createMockAdapter();
+
+  const flare = new Flare({
+    destinations: { primary: mock.adapter },
+    privacy: {
+      redact: () => {
+        throw new Error("predicate exploded");
+      },
+    },
+  });
+
+  flare.start();
+
+  const receipt = flare.capture(new Error("boom"), { tags: { plan: "pro" } });
+
+  expect(receipt.status.get()).toEqual({
+    state: "dropped",
+    reason: "sanitizer-failed",
+  });
+  expect(mock.submissions).toEqual([]);
+});
+
+test("message and operation text is scrubbed, never redacted", () => {
+  const mock = createMockAdapter();
+
+  const flare = new Flare({
+    destinations: { primary: mock.adapter },
+    privacy: { redact: () => true },
+  });
+
+  flare.start();
+  flare.message("checkout retried", {
+    operation: "checkout",
+    tags: { plan: "pro" },
+  });
+
+  expect(mock.submissions[0]?.report).toMatchObject({
+    message: "checkout retried",
+    operation: "checkout",
+    tags: { plan: "[Redacted]" },
+  });
+});
+
+test("redact must be a function, which the constructor checks", () => {
+  expect(
+    () =>
+      new Flare({
+        destinations: { primary: createMockAdapter().adapter },
+        // @ts-expect-error -- rules are no longer a list.
+        privacy: { redact: ["token"] },
+      }),
+  ).toThrow(
+    expect.objectContaining({
+      name: "FlareError",
+      code: "INVALID_CONFIGURATION",
+      message: "privacy.redact must be a function.",
+    }),
+  );
+});
+
+test("a breadcrumb name is scrubbed and bounded like any other text", () => {
+  const mock = createMockAdapter();
+
+  const flare = new Flare({
+    destinations: { primary: mock.adapter },
+    privacy: {
+      scrub: (text) => text.replaceAll("ada@example.com", "[email]"),
+      limits: { stringLength: 20 },
+    },
+  });
+
+  flare.start();
+  flare.breadcrumb(`Opened ada@example.com ${"x".repeat(50)}`);
+  flare.capture(new Error("boom"));
+
+  expect(mock.submissions[0]?.report.breadcrumbs[0]?.name).toBe(
+    "Opened [email] xxxxx",
+  );
+});
 
 test("redaction runs before the startup buffer, the mock, diagnostics and fan-out ever see the data", () => {
   const first = createMockAdapter();
@@ -206,10 +357,12 @@ test("an oversized report is cut down to its limits and says what it lost", () =
 
   const report = mock.submissions[0]?.report;
 
+  if (report?.kind !== "exception") {
+    throw new Error("Expected an exception report.");
+  }
+
   expect(report).toMatchObject({ exception: { message: "m".repeat(20) } });
-  expect(
-    report?.kind === "exception" ? report.exception.stack?.length : 0,
-  ).toBe(40);
+  expect(report.exception.stack?.length).toBe(40);
   expect(JSON.stringify(report).length).toBeLessThan(900);
   expect(report?.losses.map((loss) => loss.path)).toEqual(
     expect.arrayContaining([

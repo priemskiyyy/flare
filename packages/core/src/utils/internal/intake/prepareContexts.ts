@@ -14,7 +14,7 @@ export const prepareContexts = (
   value: Record<string, Record<string, unknown>>;
   losses: MappingLoss[];
 } => {
-  const value: Record<string, Record<string, unknown>> = Object.create(null);
+  const value: Array<[string, Record<string, unknown>]> = [];
   const losses: MappingLoss[] = [];
 
   for (const [name, raw] of Object.entries(contexts)) {
@@ -26,17 +26,21 @@ export const prepareContexts = (
       continue;
     }
 
+    // A context the predicate names is left out whole.
+    if (policy.redact(name, path)) {
+      continue;
+    }
+
     const sanitized = sanitizeValue(validation.value, path, policy);
 
     losses.push(...sanitized.losses);
 
-    // A path rule naming the whole context leaves a marker, not an object.
     if (!isRecord(sanitized.value)) {
       continue;
     }
 
-    value[name] = sanitized.value;
+    value.push([name, sanitized.value]);
   }
 
-  return { value: Object.freeze(value), losses };
+  return { value: Object.freeze(Object.fromEntries(value)), losses };
 };

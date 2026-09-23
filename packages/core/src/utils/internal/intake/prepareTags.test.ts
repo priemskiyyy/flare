@@ -7,7 +7,7 @@ import { DEFAULT_LIMITS } from "src/utils/constants/limits";
 import { prepareTags } from "src/utils/internal/intake/prepareTags";
 
 const policy: PrivacyPolicy = {
-  redact: [],
+  redact: () => false,
   scrub: null,
   limits: DEFAULT_LIMITS,
 };
@@ -70,7 +70,7 @@ test("a tag named by a redaction rule is redacted, not dropped", () => {
   expect(
     prepareTags({ sessionToken: "abc", area: "upload" }, undefined, {
       ...policy,
-      redact: [/token/i],
+      redact: (key) => /token/i.test(key),
     }).value,
   ).toEqual({ sessionToken: "[Redacted]", area: "upload" });
 });

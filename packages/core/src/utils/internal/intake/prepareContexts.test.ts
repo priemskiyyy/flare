@@ -6,7 +6,7 @@ import { DEFAULT_LIMITS } from "src/utils/constants/limits";
 import { prepareContexts } from "src/utils/internal/intake/prepareContexts";
 
 const policy: PrivacyPolicy = {
-  redact: [],
+  redact: () => false,
   scrub: null,
   limits: DEFAULT_LIMITS,
 };
@@ -29,7 +29,7 @@ test("without a schema every named object is kept and sanitized", () => {
   expect(
     prepareContexts({ upload: { attempt: 1, password: "x" } }, undefined, {
       ...policy,
-      redact: ["password"],
+      redact: (key) => key === "password",
     }),
   ).toEqual({
     value: { upload: { attempt: 1, password: "[Redacted]" } },
@@ -74,14 +74,14 @@ test("with a schema an invalid or undeclared context is rejected", () => {
   });
 });
 
-test("a context redacted as a whole by a path rule is left out", () => {
+test("a context the predicate names by its path is left out whole", () => {
   expect(
     prepareContexts(
       { billing: { card: "4242" }, upload: { attempt: 1 } },
       undefined,
       {
         ...policy,
-        redact: ["contexts.billing"],
+        redact: (_key, path) => path === "contexts.billing",
       },
     ),
   ).toEqual({ value: { upload: { attempt: 1 } }, losses: [] });

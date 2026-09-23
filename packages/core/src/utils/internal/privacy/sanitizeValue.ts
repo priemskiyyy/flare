@@ -1,6 +1,6 @@
 import type { MappingLoss } from "src/types/MappingLoss";
 import type { PrivacyPolicy } from "src/types/internal/PrivacyPolicy";
-import type { RedactRule } from "src/types/RedactRule";
+import { isInstanceOf } from "src/utils/common/isInstanceOf";
 import { REDACTED } from "src/utils/constants/privacy";
 import { sanitizeString } from "src/utils/internal/privacy/sanitizeString";
 
@@ -14,37 +14,11 @@ type Walk = {
 
 const OMIT = Symbol("omit");
 
-const matchesRule = (rule: RedactRule, key: string | null, path: string) => {
-  if (typeof rule === "string") {
-    if (rule === path) {
-      return true;
-    }
-
-    if (key === null) {
-      return false;
-    }
-
-    return rule.toLowerCase() === key.toLowerCase();
-  }
-
-  if (key === null) {
-    return false;
-  }
-
-  // A global or sticky RegExp remembers where it stopped; every key starts over.
-  rule.lastIndex = 0;
-
-  return rule.test(key);
-};
-
-const isRedacted = (walk: Walk, key: string | null, path: string) =>
-  walk.policy.redact.some((rule) => matchesRule(rule, key, path));
-
-const truncated = (walk: Walk, path: string) => {
+const recordTruncation = (walk: Walk, path: string) => {
   walk.losses.push({ path, reason: "truncated" });
 };
 
-const spend = (walk: Walk, cost: number) => {
+const spendBudget = (walk: Walk, cost: number) => {
   if (cost > walk.remaining) {
     walk.remaining = 0;
 
@@ -56,6 +30,9 @@ const spend = (walk: Walk, cost: number) => {
   return true;
 };
 
+type Constructor = abstract new (...parameters: never[]) => object;
+
+// The native method, so a subclass cannot run its own code here.
 const describeDate = (date: Date) => {
   try {
     return Date.prototype.toISOString.call(date);
@@ -64,17 +41,52 @@ const describeDate = (date: Date) => {
   }
 };
 
-const isDate = (value: object): value is Date => {
+const describeUrl = (url: URL) => {
   try {
-    return value instanceof Date;
+    return URL.prototype.toString.call(url);
   } catch {
-    return false;
+    return "[Invalid URL]";
   }
+};
+
+// These keep their content outside their own properties, where a copy would
+// find an empty object, so only their kind is kept.
+const OPAQUE_BUILT_INS: ReadonlyArray<readonly [Constructor, string]> = [
+  [Map, "[Map]"],
+  [Set, "[Set]"],
+  [WeakMap, "[WeakMap]"],
+  [WeakSet, "[WeakSet]"],
+  [Promise, "[Promise]"],
+  [RegExp, "[RegExp]"],
+  [Error, "[Error]"],
+  [ArrayBuffer, "[Binary]"],
+];
+
+// A revoked proxy throws even here.
+const readIsArray = (value: object) => {
+  try {
+    return Array.isArray(value);
+  } catch {
+    return null;
+  }
+};
+
+const describeOpaqueBuiltIn = (value: object) => {
+  if (ArrayBuffer.isView(value)) {
+    return "[Binary]";
+  }
+
+  for (const [constructor, marker] of OPAQUE_BUILT_INS) {
+    if (isInstanceOf(value, constructor)) {
+      return marker;
+    }
+  }
+
+  return null;
 };
 
 const readObjectDescriptors = (value: object, limit: number) => {
   try {
-    const maxEntries = Number.isNaN(limit) ? 0 : Math.trunc(limit);
     const entries: Array<[string, PropertyDescriptor]> = [];
 
     // Retain a snapshot before scrubbing, without copying every input descriptor.
@@ -89,7 +101,7 @@ const readObjectDescriptors = (value: object, limit: number) => {
         continue;
       }
 
-      if (entries.length >= maxEntries) {
+      if (entries.length >= limit) {
         return { entries, truncated: true };
       }
 
@@ -102,7 +114,7 @@ const readObjectDescriptors = (value: object, limit: number) => {
   }
 };
 
-const readArrayDescriptors = (value: unknown[], limit: number) => {
+const readArrayDescriptors = (value: object, limit: number) => {
   try {
     const length: unknown = Object.getOwnPropertyDescriptor(
       value,
@@ -126,7 +138,7 @@ const readArrayDescriptors = (value: unknown[], limit: number) => {
 
 const sanitizeArray = (
   walk: Walk,
-  value: unknown[],
+  value: object,
   path: string,
   depth: number,
 ) => {
@@ -137,7 +149,7 @@ const sanitizeArray = (
   }
 
   if (array.length > array.items.length) {
-    truncated(walk, path);
+    recordTruncation(walk, path);
   }
 
   const result = array.items.map((descriptor, index) => {
@@ -153,7 +165,12 @@ const sanitizeArray = (
       depth,
     );
 
-    return sanitized === OMIT ? null : sanitized;
+    // An array keeps its positions, so what an object would omit becomes null.
+    if (sanitized === OMIT) {
+      return null;
+    }
+
+    return sanitized;
   });
 
   return Object.freeze(result);
@@ -166,7 +183,7 @@ const sanitizeProperty = (
   path: string,
   depth: number,
 ) => {
-  if (isRedacted(walk, key, path)) {
+  if (walk.policy.redact(key, path)) {
     return REDACTED;
   }
 
@@ -195,14 +212,14 @@ const sanitizeObject = (
   }
 
   if (descriptors.truncated) {
-    truncated(walk, path);
+    recordTruncation(walk, path);
   }
 
-  const result: Record<string, unknown> = Object.create(null);
+  const entries: Array<[string, unknown]> = [];
 
   for (const [key, descriptor] of descriptors.entries) {
-    if (!spend(walk, key.length)) {
-      truncated(walk, path);
+    if (!spendBudget(walk, key.length)) {
+      recordTruncation(walk, path);
       break;
     }
 
@@ -218,10 +235,12 @@ const sanitizeObject = (
       continue;
     }
 
-    result[key] = sanitized;
+    entries.push([key, sanitized]);
   }
 
-  return Object.freeze(result);
+  // An ordinary object, which every provider SDK accepts, whose keys are all
+  // its own: `fromEntries` defines them, so `__proto__` is a key like any other.
+  return Object.freeze(Object.fromEntries(entries));
 };
 
 const sanitizeContainer = (
@@ -230,8 +249,21 @@ const sanitizeContainer = (
   path: string,
   depth: number,
 ) => {
-  if (isDate(value)) {
+  if (isInstanceOf(value, Date)) {
     return describeDate(value);
+  }
+
+  // Hermes has no URL unless the application installs one.
+  if (typeof URL === "function" && isInstanceOf(value, URL)) {
+    return sanitizeLeaf(walk, describeUrl(value), path);
+  }
+
+  const marker = describeOpaqueBuiltIn(value);
+
+  if (marker !== null) {
+    walk.losses.push({ path, reason: "unsupported" });
+
+    return marker;
   }
 
   if (walk.ancestors.has(value)) {
@@ -239,15 +271,21 @@ const sanitizeContainer = (
   }
 
   if (depth >= walk.policy.limits.depth) {
-    truncated(walk, path);
+    recordTruncation(walk, path);
 
     return "[Depth limit]";
+  }
+
+  const isArray = readIsArray(value);
+
+  if (isArray === null) {
+    return "[Unreadable]";
   }
 
   walk.ancestors.add(value);
 
   try {
-    if (Array.isArray(value)) {
+    if (isArray) {
       return sanitizeArray(walk, value, path, depth);
     }
 
@@ -268,7 +306,12 @@ const sanitizeLeaf = (walk: Walk, value: unknown, path: string) => {
   }
 
   if (typeof value === "number") {
-    return Number.isFinite(value) ? value : String(value);
+    // JSON has no NaN or Infinity, so their names are kept instead.
+    if (!Number.isFinite(value)) {
+      return String(value);
+    }
+
+    return value;
   }
 
   if (typeof value === "boolean") {
@@ -298,14 +341,14 @@ const sanitize = (
   }
 
   if (walk.remaining <= 0) {
-    truncated(walk, path);
+    recordTruncation(walk, path);
 
     return "[Size limit]";
   }
 
   if (typeof value === "object") {
-    if (!spend(walk, 2)) {
-      truncated(walk, path);
+    if (!spendBudget(walk, 2)) {
+      recordTruncation(walk, path);
 
       return "[Size limit]";
     }
@@ -315,8 +358,8 @@ const sanitize = (
 
   const leaf = sanitizeLeaf(walk, value, path);
 
-  if (!spend(walk, String(leaf).length)) {
-    truncated(walk, path);
+  if (!spendBudget(walk, String(leaf).length)) {
+    recordTruncation(walk, path);
 
     return "[Size limit]";
   }
@@ -327,8 +370,8 @@ const sanitize = (
 /**
  * Copies application data into frozen, bounded, redacted plain data. Reads
  * own data properties only, without invoking getters or serialization methods.
- * Unreadable proxy descriptors become a marker. A throwing `scrub` is
- * deliberately not contained: the caller owns failing closed.
+ * Unreadable proxy descriptors become a marker. A throwing `redact` or
+ * `scrub` is deliberately not contained: the caller owns failing closed.
  */
 export const sanitizeValue = (
   value: unknown,
@@ -345,10 +388,6 @@ export const sanitizeValue = (
     remaining: policy.limits.totalSize,
     losses: [],
   };
-
-  if (isRedacted(walk, null, path)) {
-    return { value: REDACTED, losses: [] };
-  }
 
   return { value: sanitize(walk, value, path, 0), losses: walk.losses };
 };

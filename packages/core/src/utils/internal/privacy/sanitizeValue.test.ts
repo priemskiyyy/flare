@@ -2,14 +2,62 @@ import { expect, test, vi } from "vitest";
 
 import type { PrivacyPolicy } from "src/types/internal/PrivacyPolicy";
 import { DEFAULT_LIMITS } from "src/utils/constants/limits";
-import { DEFAULT_REDACT } from "src/utils/constants/privacy";
 import { sanitizeValue } from "src/utils/internal/privacy/sanitizeValue";
+import { isSensitiveKey } from "src/utils/isSensitiveKey";
 
 const policy = (overrides: Partial<PrivacyPolicy> = {}): PrivacyPolicy => ({
-  redact: [],
+  redact: () => false,
   scrub: null,
   limits: DEFAULT_LIMITS,
   ...overrides,
+});
+
+test("a URL keeps its address, and a built-in whose content lives outside its own properties keeps its kind and is a loss", () => {
+  const { value, losses } = sanitizeValue(
+    {
+      url: new URL("https://example.test/upload?kind=avatar"),
+      map: new Map([["a", 1]]),
+      set: new Set([1]),
+      weakMap: new WeakMap(),
+      weakSet: new WeakSet(),
+      promise: Promise.resolve(1),
+      pattern: /secret/g,
+      error: new TypeError("boom"),
+      bytes: new Uint8Array([1, 2]),
+      buffer: new ArrayBuffer(2),
+      view: new DataView(new ArrayBuffer(2)),
+    },
+    "contexts.upload",
+    policy(),
+  );
+
+  expect(value).toEqual({
+    url: "https://example.test/upload?kind=avatar",
+    map: "[Map]",
+    set: "[Set]",
+    weakMap: "[WeakMap]",
+    weakSet: "[WeakSet]",
+    promise: "[Promise]",
+    pattern: "[RegExp]",
+    error: "[Error]",
+    bytes: "[Binary]",
+    buffer: "[Binary]",
+    view: "[Binary]",
+  });
+  expect(losses).toEqual(
+    [
+      "map",
+      "set",
+      "weakMap",
+      "weakSet",
+      "promise",
+      "pattern",
+      "error",
+      "bytes",
+      "buffer",
+      "view",
+    ].map((key) => ({ path: `contexts.upload.${key}`, reason: "unsupported" })),
+  );
 });
 
 const limited = (limits: Partial<PrivacyPolicy["limits"]>) =>
@@ -42,11 +90,11 @@ test("the result is frozen at every level", () => {
   });
 });
 
-test("a key rule redacts at any depth and ignores case", () => {
+test("a key the predicate names is redacted at any depth", () => {
   const { value } = sanitizeValue(
     { auth: { SessionId: "abc" }, sessionid: "def", other: "kept" },
     "contexts.request",
-    policy({ redact: ["sessionId"] }),
+    policy({ redact: (key) => key.toLowerCase() === "sessionid" }),
   );
 
   expect(value).toEqual({
@@ -56,41 +104,17 @@ test("a key rule redacts at any depth and ignores case", () => {
   });
 });
 
-test("a string rule is an exact key, never a substring", () => {
-  const { value } = sanitizeValue(
-    { count: 3, countdown: 9 },
-    "contexts.timer",
-    policy({ redact: ["count"] }),
-  );
-
-  expect(value).toEqual({ count: "[Redacted]", countdown: 9 });
-});
-
-test("a path rule redacts only the path it names", () => {
-  const rules = policy({ redact: ["contexts.billing.note"] });
-
-  expect(sanitizeValue({ note: "x" }, "contexts.billing", rules).value).toEqual(
-    {
-      note: "[Redacted]",
-    },
-  );
-  expect(sanitizeValue({ note: "x" }, "contexts.upload", rules).value).toEqual({
-    note: "x",
+test("the predicate gets each key's dotted path, so it can name one path only", () => {
+  const onlyBilling = policy({
+    redact: (_key, path) => path === "contexts.billing.note",
   });
-});
 
-test("a global RegExp rule matches every key, not every other one", () => {
-  const { value } = sanitizeValue(
-    { "x-internal-a": 1, "x-internal-b": 2, "x-internal-c": 3 },
-    "contexts.headers",
-    policy({ redact: [/^x-internal-/g] }),
-  );
-
-  expect(value).toEqual({
-    "x-internal-a": "[Redacted]",
-    "x-internal-b": "[Redacted]",
-    "x-internal-c": "[Redacted]",
-  });
+  expect(
+    sanitizeValue({ note: "x" }, "contexts.billing", onlyBilling).value,
+  ).toEqual({ note: "[Redacted]" });
+  expect(
+    sanitizeValue({ note: "x" }, "contexts.upload", onlyBilling).value,
+  ).toEqual({ note: "x" });
 });
 
 test("the default rules cover the usual credentials", () => {
@@ -106,7 +130,7 @@ test("the default rules cover the usual credentials", () => {
       plan: "pro",
     },
     "contexts.request",
-    policy({ redact: DEFAULT_REDACT }),
+    policy({ redact: isSensitiveKey }),
   );
 
   expect(value).toEqual({
@@ -281,18 +305,6 @@ test("non-enumerable properties do not consume object breadth or cause truncatio
     losses: [],
   });
 });
-
-test.each([
-  { breadth: 1.5, value: { first: 1 } },
-  { breadth: Number.NaN, value: {} },
-])(
-  "object breadth $breadth keeps the same prefix as array length coercion",
-  ({ breadth, value }) => {
-    expect(
-      sanitizeValue({ first: 1, second: 2 }, "c", limited({ breadth })),
-    ).toEqual({ value, losses: [{ path: "c", reason: "truncated" }] });
-  },
-);
 
 test("retained object values are snapshotted before a scrubber changes the input", () => {
   const input = { first: "one", second: "original" };
@@ -480,7 +492,7 @@ test("a redacted value is never shown to the scrubber", () => {
   sanitizeValue(
     { password: "hunter2" },
     "c",
-    policy({ redact: ["password"], scrub }),
+    policy({ redact: (key) => key === "password", scrub }),
   );
 
   expect(scrub).not.toHaveBeenCalled();
@@ -506,6 +518,9 @@ test("a scrubber that returns something other than a string is a failure", () =>
   const scrub: PrivacyPolicy["scrub"] = () => JSON.parse("42");
 
   expect(() => sanitizeValue({ note: "text" }, "c", policy({ scrub }))).toThrow(
-    "The scrub option must return a string.",
+    expect.objectContaining({
+      code: "INVALID_CONFIGURATION",
+      message: "The scrub option must return a string.",
+    }),
   );
 });

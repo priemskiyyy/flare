@@ -6,7 +6,7 @@ import { DEFAULT_LIMITS } from "src/utils/constants/limits";
 import { prepareBreadcrumb } from "src/utils/internal/intake/prepareBreadcrumb";
 
 const policy: PrivacyPolicy = {
-  redact: [],
+  redact: () => false,
   scrub: null,
   limits: DEFAULT_LIMITS,
 };
@@ -34,7 +34,7 @@ test("a breadcrumb keeps its name, sanitized data and occurrence time", () => {
         timestamp: 1_000,
       },
       undefined,
-      { ...policy, redact: ["token"] },
+      { ...policy, redact: (key) => key === "token" },
     ),
   ).toEqual({
     value: {

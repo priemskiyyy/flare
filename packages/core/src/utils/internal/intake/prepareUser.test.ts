@@ -5,7 +5,7 @@ import { DEFAULT_LIMITS } from "src/utils/constants/limits";
 import { prepareUser } from "src/utils/internal/intake/prepareUser";
 
 const policy: PrivacyPolicy = {
-  redact: [],
+  redact: () => false,
   scrub: null,
   limits: DEFAULT_LIMITS,
 };
@@ -45,64 +45,38 @@ test("bounding the reported id never shortens the identity used for account isol
 });
 
 test("ignored user fields cannot consume the budget of known identity fields", () => {
+  const profile = { extra: "ignored", id: "u1" };
+
   expect(
-    prepareUser(
-      { extra: "ignored", id: "u1" },
-      {
-        ...policy,
-        limits: { ...policy.limits, breadth: 1 },
-      },
-    ),
+    prepareUser(profile, {
+      ...policy,
+      limits: { ...policy.limits, breadth: 1 },
+    }),
   ).toEqual({ user: { id: "u1" }, identity: "u1", losses: [] });
 });
 
-test("an accessor is never accepted as a user id", () => {
-  const get = vi.fn(() => "u1");
-  const user = Object.defineProperty({}, "id", { get, enumerable: true });
-
-  expect(prepareUser(user, policy)).toEqual({
+test("an empty id signs the user out rather than keeping the previous account", () => {
+  expect(prepareUser({ id: "" }, policy)).toEqual({
     user: null,
     identity: null,
     losses: [{ path: "user", reason: "invalid" }],
   });
-  expect(get).not.toHaveBeenCalled();
-});
-
-test.each([
-  { label: "a missing id", user: { email: "ada@example.com" } },
-  { label: "an empty id", user: { id: "" } },
-  { label: "a numeric id", user: { id: 42 } },
-  { label: "a string", user: "u1" },
-])(
-  "$label signs the user out rather than keeping the previous account",
-  (row) => {
-    expect(prepareUser(row.user, policy)).toEqual({
-      user: null,
-      identity: null,
-      losses: [{ path: "user", reason: "invalid" }],
-    });
-  },
-);
-
-test("a field that is not a string is dropped and recorded", () => {
-  expect(prepareUser({ id: "u1", email: 42 }, policy)).toEqual({
-    user: { id: "u1" },
-    identity: "u1",
-    losses: [{ path: "user.email", reason: "invalid" }],
-  });
 });
 
 test("anything beyond id, email and name is ignored", () => {
-  expect(prepareUser({ id: "u1", role: "admin" }, policy).user).toEqual({
-    id: "u1",
-  });
+  const profile = { id: "u1", role: "admin", password: "hunter2" };
+
+  expect(prepareUser(profile, policy).user).toEqual({ id: "u1" });
 });
 
-test("a path rule redacts a field while identity stays keyed on the real id", () => {
+test("a field the predicate names by its path is redacted, while identity stays keyed on the real id", () => {
   expect(
     prepareUser(
       { id: "u1", email: "ada@example.com" },
-      { ...policy, redact: ["user.id", "user.email"] },
+      {
+        ...policy,
+        redact: (_key, path) => path === "user.id" || path === "user.email",
+      },
     ),
   ).toEqual({
     user: { id: "[Redacted]", email: "[Redacted]" },

@@ -8,100 +8,69 @@ type PreparedUser = {
   user: FlareUser | null;
   /** The real id, kept in memory only, so redaction cannot merge two accounts. */
   identity: string | null;
-  losses: MappingLoss[];
+  losses: readonly MappingLoss[];
 };
 
-const SIGNED_OUT: PreparedUser = { user: null, identity: null, losses: [] };
-
-// An unusable user signs out: keeping the previous account would attribute
-// the next reports to someone who may no longer be signed in.
-const INVALID: PreparedUser = {
+const SIGNED_OUT: PreparedUser = Object.freeze({
   user: null,
   identity: null,
-  losses: [{ path: "user", reason: "invalid" }],
-};
+  losses: Object.freeze([]),
+});
 
-const OPTIONAL_FIELDS = ["email", "name"] as const;
+// An empty id names no account. It signs out: keeping the previous account
+// would attribute the next reports to someone who may no longer be signed in.
+const INVALID: PreparedUser = Object.freeze({
+  user: null,
+  identity: null,
+  losses: Object.freeze([Object.freeze({ path: "user", reason: "invalid" })]),
+});
 
-const readFields = (user: unknown): Record<string, unknown> | null => {
-  try {
-    if (!isRecord(user)) {
-      return null;
-    }
-
-    // Accessors are never identity data.
-    return {
-      id: Object.getOwnPropertyDescriptor(user, "id")?.value,
-      email: Object.getOwnPropertyDescriptor(user, "email")?.value,
-      name: Object.getOwnPropertyDescriptor(user, "name")?.value,
-    };
-  } catch {
-    return null;
-  }
-};
-
-/** Validates and redacts a user. The scrubber never rewrites identity fields. */
+/** Redacts and bounds a user. The scrubber never rewrites identity fields. */
 export const prepareUser = (
-  user: unknown,
+  user: FlareUser | null,
   policy: PrivacyPolicy,
 ): PreparedUser => {
   if (user === null) {
     return SIGNED_OUT;
   }
 
-  const fields = readFields(user);
+  const { id, email, name } = user;
 
-  if (fields === null) {
+  if (id === "") {
     return INVALID;
   }
 
-  // Keep the full id only for identity comparison. Bounds apply to the report.
-  const { id } = fields;
+  // Only these three are identity data, and an absent one takes no budget.
+  const identityFields: FlareUser = { id };
 
-  if (typeof id !== "string" || id === "") {
-    return INVALID;
+  if (email !== undefined) {
+    identityFields.email = email;
   }
 
-  const candidate: Record<string, string> = { id };
-  const losses: MappingLoss[] = [];
-
-  for (const field of OPTIONAL_FIELDS) {
-    const value = fields[field];
-
-    if (value === undefined) {
-      continue;
-    }
-
-    if (typeof value !== "string") {
-      losses.push({ path: `user.${field}`, reason: "invalid" });
-      continue;
-    }
-
-    candidate[field] = value;
+  if (name !== undefined) {
+    identityFields.name = name;
   }
 
-  const redacted = sanitizeValue(candidate, "user", { ...policy, scrub: null });
+  const redacted = sanitizeValue(identityFields, "user", {
+    ...policy,
+    scrub: null,
+  });
 
-  losses.push(...redacted.losses);
+  const { value, losses } = redacted;
 
-  if (!isRecord(redacted.value)) {
+  // A rule naming the whole user, or its id, leaves a marker instead of an account.
+  if (!isRecord(value) || typeof value.id !== "string") {
     return { user: null, identity: id, losses };
   }
 
-  const redactedId = redacted.value.id;
+  const prepared: FlareUser = { id: value.id };
 
-  if (typeof redactedId !== "string") {
-    return { user: null, identity: id, losses };
+  if (typeof value.email === "string") {
+    prepared.email = value.email;
   }
 
-  const prepared: FlareUser = { id: redactedId };
-
-  for (const field of OPTIONAL_FIELDS) {
-    const value = redacted.value[field];
-
-    if (typeof value === "string") {
-      prepared[field] = value;
-    }
+  if (typeof value.name === "string") {
+    prepared.name = value.name;
   }
 
   return { user: Object.freeze(prepared), identity: id, losses };

@@ -1,7 +1,5 @@
-import type { RedactRule } from "src/types/RedactRule";
-
 export const REDACTED = "[Redacted]";
 
-export const DEFAULT_REDACT: RedactRule[] = [
-  /token|authorization|password|secret|cookie|api[-_]?key/i,
-];
+/** Keys that name a credential, whatever their case or separator. */
+export const SENSITIVE_KEY =
+  /token|authorization|passw(?:or)?d|secret|cookie|credential|bearer|jwt|session[-_]?id|(?:api|access|private)[-_]?key/i;
