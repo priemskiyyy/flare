@@ -12,7 +12,7 @@ For a bug report, include:
 - The devtools timeline for the report, if the application mounts them.
 - Whether it happens before `start()`, across a sign-in or sign-out, during `flush()` or after `dispose()`.
 
-Use [GitHub issues](https://github.com/priemskiyyy/flare/issues) for reproducible bugs and feature requests. Remove DSNs, API keys, access tokens and personal data from examples, receipts and logs. Diagnostics and the devtools timeline carry no report content, so they are safe to share as they are.
+Use [GitHub issues](https://github.com/priemskiyyy/flare/issues) for reproducible bugs and feature requests. Report a security issue privately instead, as [SECURITY.md](SECURITY.md) describes. Remove DSNs, API keys, access tokens and personal data from examples, receipts and logs. Diagnostics and the devtools timeline carry no report content, so they are safe to share as they are.
 
 If a report reached a provider but looks wrong there, check first whether the provider's own SDK produces the same result without Flare. Grouping, symbolication, sampling and quotas are the provider's.
 
